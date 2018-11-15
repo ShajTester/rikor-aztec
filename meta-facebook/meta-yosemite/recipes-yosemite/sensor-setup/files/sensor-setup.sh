@@ -40,7 +40,15 @@
 # been carefully explored.
 
 modprobe lm75
+modprobe tmp421
 modprobe pmbus
+
+
+echo tmp75 0x49 > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
+echo tmp75 0x4b > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
+echo tmp75 0x4c > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
+echo tmp75 0x4e > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
+echo tmp421 0x4f > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
 
 # setup ADC channels
 
@@ -68,25 +76,42 @@ config_adc() {
     echo 1 > ${ADC_PATH}/adc${channel}_en
 }
 
-config_adc 0  5110  3480 0
-config_adc 1  5110  1020 0
-config_adc 2  5110  8250 0
-config_adc 3  5110  1020 0
-config_adc 4  5110  1020 0
-config_adc 5  5110  1020 0
-config_adc 6  5110  1020 0
-config_adc 7  5110  8250 0
+config_adc 0  5100  8200 0
+config_adc 1  5110  1000 0
+config_adc 2  5100  8200 0
+config_adc 3  5100  3400 0
+config_adc 4     0     1 0
+config_adc 5     0     1 0
+config_adc 6     0     1 0
+config_adc 7     0     1 0
+config_adc 8  5110  20500 0
+config_adc 9     0     1 0
+config_adc 10    0     1 0
+config_adc 11    0     1 0
+config_adc 12    0     1 0
+config_adc 13    0     1 0
+config_adc 14    0     1 0
+config_adc 15    0     1 0
 
 
-#echo 1 > /sys/devices/platform/ast_adc.0/adc0_en
-#echo 1 > /sys/devices/platform/ast_adc.0/adc1_en
-#echo 1 > /sys/devices/platform/ast_adc.0/adc2_en
-#echo 1 > /sys/devices/platform/ast_adc.0/adc3_en
-#echo 1 > /sys/devices/platform/ast_adc.0/adc4_en
-#echo 1 > /sys/devices/platform/ast_adc.0/adc5_en
-#echo 1 > /sys/devices/platform/ast_adc.0/adc6_en
-#echo 1 > /sys/devices/platform/ast_adc.0/adc7_en
 
-i2cset -y -f 10 0x40 0xd4 0x3f1c w
-rmmod adm1275
-modprobe adm1275
+echo 1 > /sys/devices/platform/ast_adc.0/adc0_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc1_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc2_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc3_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc4_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc5_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc6_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc7_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc8_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc9_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc10_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc11_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc12_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc13_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc14_en
+echo 1 > /sys/devices/platform/ast_adc.0/adc15_en
+
+# i2cset -y -f 10 0x40 0xd4 0x3f1c w
+#rmmod adm1275
+#modprobe adm1275

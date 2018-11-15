@@ -54,11 +54,11 @@ do_install() {
   install -d ${D}${sysconfdir}/init.d
   install -d ${D}${sysconfdir}/rcS.d
   install -m 0755 ${WORKDIR}/fw_env_config.sh ${D}${sysconfdir}/init.d/fw_env_config.sh
-  update-rc.d -r ${D} fw_env_config.sh start 05 S .
+# update-rc.d -r ${D} fw_env_config.sh start 05 S .
   install -m 755 setup-gpio.sh ${D}${sysconfdir}/init.d/setup-gpio.sh
-  update-rc.d -r ${D} setup-gpio.sh start 59 5 .
+# update-rc.d -r ${D} setup-gpio.sh start 59 5 .
   install -m 755 power-on.sh ${D}${sysconfdir}/init.d/power-on.sh
-  update-rc.d -r ${D} power-on.sh start 70 5 .
+# update-rc.d -r ${D} power-on.sh start 70 5 .
 }
 
 RDEPENDS_${PN} += "bash"
