@@ -188,7 +188,8 @@ int main(int argc, char *argv[])
 	int retval = -1;
 	// Инициализация
 
-	static struct option long_options[] = {
+	static struct option long_options[] = 
+	{
 		// {"conf_file", required_argument, 0, 'c'},
 		// {"log_file", required_argument, 0, 'l'},
 		{"help", no_argument, 0, 'h'},
@@ -206,8 +207,10 @@ int main(int argc, char *argv[])
 	app_name = argv[0];
 
 	/* Try to process all command line arguments */
-	while ((value = getopt_long(argc, argv, "c:l:hs:g", long_options, &option_index)) != -1) {
-		switch (value) {
+	while ((value = getopt_long(argc, argv, "c:l:hs:g", long_options, &option_index)) != -1) 
+	{
+		switch (value) 
+		{
 			case 'c':
 				conf_file_name = strdup(optarg);
 				break;
@@ -233,14 +236,18 @@ int main(int argc, char *argv[])
 	}
 
 	/* Try to open log file */
-	if (log_file_name != NULL) {
+	if (log_file_name != NULL) 
+	{
 		log_stream = fopen(log_file_name, "a+");
-		if (log_stream == NULL) {
-			fprintf(stderr, "Can not open log file: %s, error: %s",
+		if (log_stream == NULL) 
+		{
+			fprintf(stderr, "Can not open log file: %s, error: %s\n",
 				log_file_name, strerror(errno));
 			log_stream = stdout;
 		}
-	} else {
+	} 
+	else 
+	{
 		log_stream = stdout;
 	}
 
@@ -249,8 +256,9 @@ int main(int argc, char *argv[])
 
 
 	rikor_fru_t data;
+	int rf;
 
-	if(fru_buf_init(&data) == 0)
+	if((rf = fru_buf_init(&data)) == 0)
 	{
 
 		switch(func)
@@ -258,12 +266,12 @@ int main(int argc, char *argv[])
 		case 1:
 			// Store IP
 			printf("%08x\n", parse_ip(ip_string));
-			if(read_fru(&data) == 0)
-			{
+			if((rf = read_fru(EEPROM_PATH, &data)) == 0)
+			{ // Данные успешно прочитаны
 				data.ip1 = parse_ip(ip_string);
 				if(data.ip1 != 0)
 				{
-					if(write_fru(&data) != 0)
+					if(write_fru(EEPROM_PATH, &data) != 0)
 					{
 						fprintf(stderr, "EEPROM write error\n");
 						retval = 1;
@@ -275,31 +283,53 @@ int main(int argc, char *argv[])
 					retval = 3;
 				}
 			}
-			else
-			{
-				fprintf(stderr, "EEPROM read error\n");
+			else if(rf == ERRCRC)
+			{ // Из EEPROM прочитаны неправильные данные
+				fprintf(stderr, "EEPROM CRC error\n");
+				fru_buf_init(&data);
+				data.ip1 = parse_ip(ip_string);
+				if(data.ip1 != 0)
+				{
+					if(write_fru(EEPROM_PATH, &data) != 0)
+					{
+						fprintf(stderr, "EEPROM write error\n");
+						retval = 1;
+					}
+				}
+				else
+				{
+					fprintf(stderr, "Error in ip string: \"%s\"\n", ip_string);
+					retval = 3;
+				}
 				retval = 1;
 			}
 			break;
 		case 2:
 			// Get IP
-			if(read_fru(&data) == 0)
+			rf = read_fru(EEPROM_PATH, &data);
+			if(rf == 0)
 			{
 				printf("%hhu.%hhu.%hhu.%hhu\n", data.ip1 >> 24,
 					(data.ip1 >> 16) & 0xff,
 					(data.ip1 >> 8) & 0xff,
 					data.ip1 & 0xff);
 				retval = 0;
-			}				
+			}	
+			else if(rf == ERRCRC)
+			{
+				fprintf(stderr, "EEPROM CRC error\n");
+				retval = 1;
+			}
 			else
 			{
-				fprintf(stderr, "EEPROM read error\n");
+				fprintf(stderr, "EEPROM read error %d\n", rf);
 				retval = 1;
 			}
 			break;
 		default:
 			// Get all FRU data
-			if(read_fru(&data) == 0)
+			rf = read_fru(EEPROM_PATH, &data);
+			if(rf == 0)
 			{
 				printf("FRU id:   0x%08X\n", data.id);
 				printf("Board id: 0x%016llX\n", data.board_id);
@@ -309,9 +339,14 @@ int main(int argc, char *argv[])
 					data.ip1 & 0xff);
 				retval = 0;
 			}				
+			else if(rf == ERRCRC)
+			{
+				fprintf(stderr, "EEPROM CRC error\n");
+				retval = 1;
+			}
 			else
 			{
-				fprintf(stderr, "EEPROM read error\n");
+				fprintf(stderr, "EEPROM read error %d\n", rf);
 				retval = 1;
 			}
 			break;
