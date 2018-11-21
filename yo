@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+source openbmc-init-build-env meta-facebook/meta-yosemite
+

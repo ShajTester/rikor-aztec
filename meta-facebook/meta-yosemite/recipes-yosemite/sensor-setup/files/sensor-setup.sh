@@ -45,6 +45,7 @@ modprobe pmbus
 modprobe at24
 
 
+echo 24c02 0x50 > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
 echo 24c02 0x52 > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
 
 echo tmp75 0x49 > /sys/devices/platform/ast-i2c.6/i2c-6/new_device

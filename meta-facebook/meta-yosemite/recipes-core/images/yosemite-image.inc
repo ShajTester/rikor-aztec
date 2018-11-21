@@ -62,6 +62,7 @@ IMAGE_INSTALL += " sensor-setup"
 # IMAGE_INSTALL += " bbhello" 
 # IMAGE_INSTALL += " heartd"
 IMAGE_INSTALL += " rikor-sensors"
+IMAGE_INSTALL += " rikor-fru"
 
 
 
