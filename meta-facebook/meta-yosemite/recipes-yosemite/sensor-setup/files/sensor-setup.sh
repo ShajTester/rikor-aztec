@@ -43,6 +43,7 @@ modprobe lm75
 modprobe tmp421
 modprobe pmbus
 modprobe at24
+modprobe ics932s401
 
 
 echo 24c02 0x50 > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
@@ -53,6 +54,8 @@ echo tmp75 0x4b > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
 echo tmp75 0x4c > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
 echo tmp75 0x4e > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
 echo tmp421 0x4f > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
+
+echo ics932s401 0x68 > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
 
 # setup ADC channels
 
