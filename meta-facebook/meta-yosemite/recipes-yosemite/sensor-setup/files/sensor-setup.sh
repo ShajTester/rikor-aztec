@@ -46,16 +46,26 @@ modprobe at24
 modprobe ics932s401
 
 
+# FRU
 echo 24c02 0x50 > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
 echo 24c02 0x52 > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
 
+# Termo
 echo tmp75 0x49 > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
 echo tmp75 0x4b > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
 echo tmp75 0x4c > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
 echo tmp75 0x4e > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
 echo tmp421 0x4f > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
 
+# CLK GEN
 echo ics932s401 0x68 > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
+
+# Power
+echo pmbus 0x33 > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
+echo pmbus 0x2d > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
+
+# XRP7724 - не pmbus
+# echo pmbus 0x2b > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
 
 # setup ADC channels
 
