@@ -39,11 +39,11 @@ IMAGE_INSTALL += " sensor-setup"
 # IMAGE_INSTALL += " log-util"
 # IMAGE_INSTALL += " lldp-util"
 # IMAGE_INSTALL += " spatula"
-# IMAGE_INSTALL += " openbmc-utils"
+IMAGE_INSTALL += " openbmc-utils"
 # IMAGE_INSTALL += " conf-util"
 # IMAGE_INSTALL += " ncsi-util"
 
-# IMAGE_FEATURES += " ssh-server-openssh"
+IMAGE_FEATURES += " ssh-server-openssh"
 # IMAGE_FEATURES += " tools-debug"
 
 
@@ -62,7 +62,7 @@ IMAGE_INSTALL += " sensor-setup"
 # IMAGE_INSTALL += " bbhello" 
 # IMAGE_INSTALL += " heartd"
 IMAGE_INSTALL += " rikor-sensors"
-IMAGE_INSTALL += " dscan_0.1"
+# IMAGE_INSTALL += " dscan"
 IMAGE_INSTALL += " rikor-fru"
 
 
