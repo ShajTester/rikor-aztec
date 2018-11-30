@@ -15,6 +15,8 @@ SRC_URI = "git://github.com/ShajTester/dscan.git;protocol=http;branch=master"
 S = "${WORKDIR}/git"
 
 inherit cmake
+EXTRA_OECMAKE += " -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_SHARED_LIBS=ON "
+
 
 BBCLASSEXTEND = "native"
 
