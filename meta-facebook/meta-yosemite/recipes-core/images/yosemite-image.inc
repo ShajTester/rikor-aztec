@@ -62,7 +62,7 @@ IMAGE_FEATURES += " ssh-server-openssh"
 # IMAGE_INSTALL += " bbhello" 
 # IMAGE_INSTALL += " heartd"
 IMAGE_INSTALL += " rikor-sensors"
-# IMAGE_INSTALL += " dscan"
+IMAGE_INSTALL += " dscan"
 IMAGE_INSTALL += " rikor-fru"
 
 
