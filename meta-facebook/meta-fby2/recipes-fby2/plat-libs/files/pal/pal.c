@@ -21,23 +21,32 @@
  */
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <syslog.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <sys/mman.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <stddef.h>
 #include "pal.h"
 #include <facebook/bic.h>
 #include <openbmc/kv.h>
 #include <openbmc/obmc-i2c.h>
 #include <openbmc/obmc-sensor.h>
+#include <sys/socket.h>
+#include <linux/netlink.h>
+#include <openbmc/ncsi.h>
+
 
 #define BIT(value, index) ((value >> index) & 1)
 
@@ -94,6 +103,7 @@
 #define HOTSERVICE_SCRPIT "/usr/local/bin/hotservice-reinit.sh"
 #define HOTSERVICE_FILE "/tmp/slot%d_reinit"
 #define HOTSERVICE_PID  "/tmp/hotservice_reinit.pid"
+#define HOTSERVICE_BLOCK "/tmp/slot%d_reinit_block"
 
 #define FRUID_SIZE        256
 #define EEPROM_DC       "/sys/class/i2c-adapter/i2c-%d/%d-0051/eeprom"
@@ -122,6 +132,11 @@
 
 #define CHUNK_OF_CRS_HEADER_LEN 2
 
+#ifndef max
+#define max(a, b) ((a) > (b)) ? (a) : (b)
+#endif
+
+
 static int nic_powerup_prep(uint8_t slot_id, uint8_t reinit_type);
 
 
@@ -141,7 +156,7 @@ const char pal_fru_list[] = "all, slot1, slot2, slot3, slot4, spb, nic";
 const char pal_server_list[] = "slot1, slot2, slot3, slot4";
 
 #ifdef CONFIG_FBY2_GPV2
-const char pal_dev_list[] = "all, device1, device2, device3, device4, device5, device6, device7, device8, device9, device10, device11, device12";
+const char pal_dev_list[] = "all, device0, device1, device2, device3, device4, device5, device6, device7, device8, device9, device10, device11";
 const char pal_dev_pwr_option_list[] = "status, off, on, cycle";
 #endif
 
@@ -160,7 +175,13 @@ static void *m_hbled_output = NULL;
 
 static int ignore_thresh = 0;
 static uint8_t fscd_watchdog_counter = 0;
-static long post_end_counter = -1;
+
+enum {
+  POST_END_COUNTER_IGNORE_LOG  = -2,
+  POST_END_COUNTER_SHOW_LOG = -1,
+};
+
+static long post_end_counter = POST_END_COUNTER_IGNORE_LOG;
 
 typedef struct {
   uint16_t flag;
@@ -379,31 +400,31 @@ struct ras_pcie_aer_info aer_cor_err_sts[] = {
 };
 
 static const char * const pcie_port_type_strs[] = {
-	"PCIe end point",
-	"legacy PCI end point device",
-	"unknown",
-	"unknown",
-	"root port",
-	"upstream switch port",
-	"downstream switch port",
-	"PCIe to PCI/PCI-X bridge",
-	"PCI/PCI-X to PCIe bridge",
-	"root complex integrated endpoint device",
-	"root complex event collector",
+  "PCIe end point",
+  "legacy PCI end point device",
+  "unknown",
+  "unknown",
+  "root port",
+  "upstream switch port",
+  "downstream switch port",
+  "PCIe to PCI/PCI-X bridge",
+  "PCI/PCI-X to PCIe bridge",
+  "root complex integrated endpoint device",
+  "root complex event collector",
 };
 
 static const char * const memory_error_type_strs[] = {
-	"Unknown",
-	"No eeror",
-	"Single-bit ECC",
-	"Multi-bit ECC",
-	"Single-symbol ChipKill ECC",
-	"Multi-symbol ChipKill ECC",
-	"Master abort",
-	"Target abort",
-	"Parity Error",
-	"Watchdog timeout",
-	"invalid address",
+  "Unknown",
+  "No eeror",
+  "Single-bit ECC",
+  "Multi-bit ECC",
+  "Single-symbol ChipKill ECC",
+  "Multi-symbol ChipKill ECC",
+  "Master abort",
+  "Target abort",
+  "Parity Error",
+  "Watchdog timeout",
+  "invalid address",
   "Mirror Broken",
   "Memory Sparing",
   "Scrub corrected error",
@@ -412,15 +433,39 @@ static const char * const memory_error_type_strs[] = {
 };
 
 static const char * const error_severity_strs[] = {
-	"Recoverable",
-	"Fatal",
-	"Corrected",
-	"None",
+  "Recoverable",
+  "Fatal",
+  "Corrected",
+  "None",
 };
 
 const static uint8_t Memory_Error_Section[16] = {0x14, 0x11, 0xbc, 0xa5, 0x64, 0x6f, 0xde, 0x4e, 0xb8, 0x63, 0x3e, 0x83, 0xed, 0x7c, 0x83, 0xb1};
 const static uint8_t PCIe_Error_Section[16] = {0x54, 0xe9, 0x95, 0xd9, 0xc1, 0xbb, 0x0f, 0x43, 0xad, 0x91, 0xb4, 0x4d, 0xcb, 0x3c, 0x6f, 0x35};
 const static uint8_t OEM_Error_Section[16] = {0x15, 0xbc, 0xd1, 0x62, 0x9d, 0xae, 0x47, 0x44, 0xa9, 0x36, 0x5d, 0x6a, 0xc5, 0x7c, 0xd2, 0xfc};
+
+struct fsc_monitor {
+  char *sensor_name;
+  uint8_t sensor_num;
+  uint8_t offset;
+};
+
+static struct fsc_monitor fsc_monitor_tl_m2_list[] = {
+  {"nvme1_ctemp", BIC_SENSOR_NVME1_CTEMP, 0},
+  {"nvme2_ctemp", BIC_SENSOR_NVME2_CTEMP, 1}
+};
+
+static int fsc_monitor_tl_m2_list_size = sizeof(fsc_monitor_tl_m2_list) / sizeof(struct fsc_monitor);
+
+static struct fsc_monitor fsc_monitor_gp_m2_list[] = {
+  {"dc_nvme1_ctemp", DC_SENSOR_NVMe1_CTEMP, 2},
+  {"dc_nvme2_ctemp", DC_SENSOR_NVMe2_CTEMP, 3},
+  {"dc_nvme3_ctemp", DC_SENSOR_NVMe3_CTEMP, 4},
+  {"dc_nvme4_ctemp", DC_SENSOR_NVMe4_CTEMP, 5},
+  {"dc_nvme5_ctemp", DC_SENSOR_NVMe5_CTEMP, 6},
+  {"dc_nvme6_ctemp", DC_SENSOR_NVMe6_CTEMP, 7}
+};
+
+static int fsc_monitor_gp_m2_list_size = sizeof(fsc_monitor_gp_m2_list) / sizeof(struct fsc_monitor);
 
 /* curr/power calibration */
 static void
@@ -553,7 +598,6 @@ write_device(const char *device, const char *value) {
 static int
 pal_key_check(char *key) {
 
-  int ret;
   int i;
 
   i = 0;
@@ -821,7 +865,6 @@ int pal_fruid_init(uint8_t slot_id) {
 int
 pal_get_pair_slot_type(uint8_t fru) {
   int type,type2;
-  char slotpath[80] = {0};
 
   // PAL_TYPE = 0(Server), 1(Crace Flat), 2(Glacier Point), 3(Empty Slot)
   type = fby2_get_slot_type(fru);
@@ -948,7 +991,6 @@ nic_powerup_prep(uint8_t slot_id, uint8_t reinit_type) {
 // Power On the server in a given slot
 static int
 server_power_on(uint8_t slot_id) {
-  char vpath[64] = {0};
   int loop = 0;
   int max_retry = 5;
   int val = 0;
@@ -1111,13 +1153,11 @@ pal_is_server_12v_on(uint8_t slot_id, uint8_t *status) {
 
 int
 pal_slot_pair_12V_off(uint8_t slot_id) {
-  int slot_type=-1;
   int pair_slot_id;
   int pair_set_type=-1;
   uint8_t status=0;
   int ret=-1;
   char vpath[80]={0};
-  char cmd[80] = {0};
 
   if (0 == slot_id%2)
     pair_slot_id = slot_id - 1;
@@ -1134,7 +1174,6 @@ pal_slot_pair_12V_off(uint8_t slot_id) {
   if (!status)
      return 0;
 
-  slot_type = fby2_get_slot_type(slot_id);
   pair_set_type = pal_get_pair_slot_type(slot_id);
 
   /* Check whether the system is 12V off or on */
@@ -1210,7 +1249,7 @@ _set_slot_12v_en_time(uint8_t slot_id) {
   ts.tv_sec += 6;
 
   sprintf(key, "slot%u_12v_en", slot_id);
-  sprintf(value, "%d", ts.tv_sec);
+  sprintf(value, "%ld", ts.tv_sec);
   if (kv_set(key, value, 0, 0) < 0) {
     return -1;
   }
@@ -1238,7 +1277,7 @@ _check_slot_12v_en_time(uint8_t slot_id) {
 
 static int
 pal_slot_pair_12V_on(uint8_t slot_id) {
-  uint8_t pair_slot_id;
+  uint8_t pair_slot_id, dc_slot_id;
   int pair_set_type=-1;
   uint8_t status=0;
   char vpath[80]={0};
@@ -1249,13 +1288,6 @@ pal_slot_pair_12V_on(uint8_t slot_id) {
 #if defined(CONFIG_FBY2_EP)
   uint8_t server_type;
 #endif
-
-  if (0 == slot_id%2)
-    pair_slot_id = slot_id - 1;
-  else {
-    pair_slot_id = slot_id;
-    pwr_slot = slot_id + 1;
-  }
 
   pair_set_type = pal_get_pair_slot_type(slot_id);
   switch(pair_set_type) {
@@ -1334,8 +1366,17 @@ pal_slot_pair_12V_on(uint8_t slot_id) {
      case TYPE_CF_A_SV:
      case TYPE_GP_A_SV:
      case TYPE_GPV2_A_SV:
+       if (0 == slot_id%2) {
+         dc_slot_id = slot_id - 1;
+         pair_slot_id = dc_slot_id;
+       } else {
+         dc_slot_id = slot_id;
+         pwr_slot = slot_id + 1;
+         pair_slot_id = pwr_slot;
+       }
+
        /* Check whether the system is 12V off or on */
-       ret = pal_is_server_12v_on(pair_slot_id, &status);
+       ret = pal_is_server_12v_on(dc_slot_id, &status);
        if (ret < 0) {
          syslog(LOG_ERR, "pal_slot_pair_12V_on: pal_is_server_12v_on failed");
          return -1;
@@ -1343,15 +1384,16 @@ pal_slot_pair_12V_on(uint8_t slot_id) {
 
        // Need to 12V-on pair slot
        if (!status) {
-         _set_slot_12v_en_time(pair_slot_id);
-         sprintf(vpath, GPIO_VAL, gpio_12v[pair_slot_id]);
+         _set_slot_12v_en_time(dc_slot_id);
+         sprintf(vpath, GPIO_VAL, gpio_12v[dc_slot_id]);
          if (write_device(vpath, "1")) {
            return -1;
          }
+         pal_set_hsvc_ongoing(dc_slot_id, 0, 1);
 
          msleep(300);
        }
-       pal_baseboard_clock_control(pair_slot_id, "0");
+       pal_baseboard_clock_control(dc_slot_id, "0");
 
        // Check whether the system is 12V off or on
        if (pal_is_server_12v_on(pwr_slot, &status) < 0) {
@@ -1364,6 +1406,14 @@ pal_slot_pair_12V_on(uint8_t slot_id) {
          if (write_device(vpath, "1")) {
            return -1;
          }
+         pal_set_hsvc_ongoing(pwr_slot, 0, 1);
+       }
+
+       sprintf(vpath, HOTSERVICE_BLOCK, pair_slot_id);
+       if (access(vpath, F_OK) == 0) {
+         unlink(vpath);
+         sprintf(vpath, "%s slot%u start", HOTSERVICE_SCRPIT, pair_slot_id);
+         system(vpath);
        }
 
        // Check BIC Self Test Result
@@ -1458,9 +1508,10 @@ pal_set_hsvc_ongoing(uint8_t slot_id, uint8_t status, uint8_t ident) {
   return 0;
 }
 
-static void
+static int
 pal_hot_service_action(uint8_t slot_id) {
   uint8_t pair_slot_id;
+  uint8_t block_12v;
   char cmd[128];
   char hspath[80], vpath[80];
   int ret;
@@ -1469,6 +1520,8 @@ pal_hot_service_action(uint8_t slot_id) {
     pair_slot_id = slot_id - 1;
   else
     pair_slot_id = slot_id + 1;
+
+  block_12v = (pal_is_device_pair(slot_id) && pal_is_hsvc_ongoing(pair_slot_id));
 
   // Re-init system configuration
   sprintf(hspath, HOTSERVICE_FILE, slot_id);
@@ -1479,9 +1532,18 @@ pal_hot_service_action(uint8_t slot_id) {
       syslog(LOG_ERR, "%s: write_device failed", __func__);
     }
 
-    sprintf(cmd, "rm -rf %s", hspath);
+    sleep(2);
+
+    sprintf(cmd, "/usr/local/bin/check_slot_type.sh slot%u", slot_id);
     system(cmd);
-    sprintf(cmd, "%s slot%u start", HOTSERVICE_SCRPIT, slot_id);
+
+    unlink(hspath);
+    block_12v = (pal_is_device_pair(slot_id) && pal_is_hsvc_ongoing(pair_slot_id));
+    if (!block_12v) {
+      sprintf(cmd, "%s slot%u start", HOTSERVICE_SCRPIT, slot_id);
+    } else {
+      sprintf(cmd, "touch "HOTSERVICE_BLOCK, slot_id);
+    }
     system(cmd);
 
     if (0 != pal_fruid_init(slot_id)) {
@@ -1492,13 +1554,28 @@ pal_hot_service_action(uint8_t slot_id) {
     pal_set_hsvc_ongoing(slot_id, 0, 1);
   }
 
+  if (block_12v) {
+    syslog(LOG_CRIT, "12V-on blocked due to pair slot is in hot-service, FRU: %d", slot_id);
+    sprintf(vpath, GPIO_VAL, gpio_12v[slot_id]);
+    if (write_device(vpath, "0")) {
+      syslog(LOG_ERR, "%s: write_device failed", __func__);
+    }
+    return -1;
+  }
+
   // Check if pair slot is swap
   sprintf(hspath, HOTSERVICE_FILE, pair_slot_id);
   if (access(hspath, F_OK) != 0) {
     ret = pal_slot_pair_12V_on(slot_id);
     if (0 != ret)
       printf("%s pal_slot_pair_12V_on failed for fru: %d\n", __func__, slot_id);
+  } else {
+    if (pal_is_device_pair(slot_id)) {
+      printf("fail to 12V-on fru%d, due to fru%d is doing hot service! \n", slot_id, pair_slot_id);
+    }
   }
+
+  return 0;
 }
 
 // Turn off 12V for the server in given slot
@@ -1562,20 +1639,18 @@ server_12v_off(uint8_t slot_id) {
 int
 pal_system_config_check(uint8_t slot_id) {
   char vpath[80] = {0};
-  int ret=-1;
-  uint8_t value;
   int slot_type = -1;
   int last_slot_type = -1;
   char slot_str[80] = {0};
   char last_slot_str[80] = {0};
-  uint8_t server_type = 0xFF;
-  int last_server_type = -1;
 
   // 0(Server), 1(Crane Flat), 2(Glacier Point), 3(Empty Slot)
   slot_type = fby2_get_slot_type(slot_id);
   switch (slot_type) {
-     case SLOT_TYPE_SERVER:
+     case SLOT_TYPE_SERVER: {
 #if defined(CONFIG_FBY2_RC) || defined(CONFIG_FBY2_EP)
+       uint8_t server_type = 0xFF;
+       int ret=-1;
        ret = fby2_get_server_type(slot_id, &server_type);
        if (ret) {
          syslog(LOG_ERR, "%s, Get server type failed\n", __func__);
@@ -1598,6 +1673,7 @@ pal_system_config_check(uint8_t slot_id) {
 #else
        sprintf(slot_str,"1S Server");
 #endif
+       }
        break;
      case SLOT_TYPE_CF:
        sprintf(slot_str,"Crane Flat");
@@ -1626,8 +1702,9 @@ pal_system_config_check(uint8_t slot_id) {
 
   // 0(Server), 1(Crane Flat), 2(Glacier Point), 3(Empty Slot)
   switch (last_slot_type) {
-     case SLOT_TYPE_SERVER:
+     case SLOT_TYPE_SERVER: {
 #if defined(CONFIG_FBY2_RC) || defined(CONFIG_FBY2_EP)
+      int last_server_type = -1;
        sprintf(vpath, SV_TYPE_RECORD_FILE, slot_id);
        if (read_device(vpath, &last_server_type)) {
          syslog(LOG_ERR, "%s, Get last server type failed\n", __func__);
@@ -1652,6 +1729,7 @@ pal_system_config_check(uint8_t slot_id) {
 #else
        sprintf(last_slot_str,"1S Server");
 #endif
+       }
        break;
      case SLOT_TYPE_CF:
        sprintf(last_slot_str,"Crane Flat");
@@ -1693,26 +1771,27 @@ server_12v_on(uint8_t slot_id) {
   uint8_t server_type, config;
 #endif
 
+  if (slot_id < 1 || slot_id > 4) {
+    return -1;
+  }
+
   // Check if another hotservice-reinit.sh instance of slotX is running
   while(1) {
     pid_file = open(HOTSERVICE_PID, O_CREAT | O_RDWR, 0666);
     rc = flock(pid_file, LOCK_EX);
     if (rc) {
-      printf("slot%d is waitting\n",slot_id);
+      printf("slot%d is waitting\n", slot_id);
       sleep(1);
     } else {
       break;
     }
   }
 
-  if (slot_id < 1 || slot_id > 4) {
-    return -1;
-  }
-
   ret = pal_is_fru_prsnt(slot_id, &slot_prsnt);
-  if (ret < 0)
-  {
+  if (ret < 0) {
     printf("%s pal_is_fru_prsnt failed for fru: %d\n", __func__, slot_id);
+    flock(pid_file, LOCK_UN);
+    close(pid_file);
     return -1;
   }
 
@@ -1723,9 +1802,12 @@ server_12v_on(uint8_t slot_id) {
     return -1;
   }
 
-  pal_hot_service_action(slot_id);
-  rc = flock(pid_file, LOCK_UN);
+  ret = pal_hot_service_action(slot_id);
+  flock(pid_file, LOCK_UN);
   close(pid_file);
+  if (ret < 0) {
+    return -1;
+  }
 
   if (!pal_is_valid_pair(slot_id, &pair_set_type)) {
     return -1;
@@ -1734,8 +1816,10 @@ server_12v_on(uint8_t slot_id) {
   if (!pal_is_device_pair(slot_id)) {  // Write 12V on
     _set_slot_12v_en_time(slot_id);
     sprintf(vpath, GPIO_VAL, gpio_12v[slot_id]);
-    if (write_device(vpath, "1"))
+    if (write_device(vpath, "1")) {
       return -1;
+    }
+    pal_set_hsvc_ongoing(slot_id, 0, 1);
   }
 
   sleep(2); // Wait for latch pin stable
@@ -2313,9 +2397,7 @@ pal_get_server_power(uint8_t slot_id, uint8_t *status) {
 
 int
 pal_get_device_power(uint8_t slot_id, uint8_t dev_id, uint8_t *status, uint8_t *type) {
-  int ret, val;
-  char value[MAX_VALUE_LEN];
-  bic_gpio_t gpio;
+  int ret;
   uint8_t retry = MAX_READ_RETRY;
 
   if (fby2_get_slot_type(slot_id) == SLOT_TYPE_GPV2) {
@@ -2415,7 +2497,7 @@ int
 pal_set_device_power(uint8_t slot_id, uint8_t dev_id, uint8_t cmd) {
   int ret;
   uint8_t status, type;
-  
+
   if (slot_id != 1 && slot_id != 3) {
     return -1;
   }
@@ -2433,29 +2515,52 @@ pal_set_device_power(uint8_t slot_id, uint8_t dev_id, uint8_t cmd) {
     case SERVER_POWER_ON:
       if (status == SERVER_POWER_ON)
         return 1;
-      else
-        return bic_set_dev_power_status(slot_id, dev_id, 1);
+      else {
+        ret = bic_set_dev_power_status(slot_id, dev_id, 1);
+        if (ret == 0) {
+          pal_set_m2_prsnt(slot_id, dev_id, 1);
+        }
+        return ret;
+      }
       break;
 
     case SERVER_POWER_OFF:
       if (status == SERVER_POWER_OFF)
         return 1;
-      else
-        return bic_set_dev_power_status(slot_id, dev_id, 2);
+      else {
+        ret = bic_set_dev_power_status(slot_id, dev_id, 2);
+        if (ret == 0) {
+          pal_set_m2_prsnt(slot_id, dev_id, 0);
+        }
+        return ret;
+      }
       break;
 
     case SERVER_POWER_CYCLE:
       if (status == SERVER_POWER_ON) {
-        if (bic_set_dev_power_status(slot_id, dev_id, 2))
-          return -1;
+
+        ret = bic_set_dev_power_status(slot_id, dev_id, 2);
+        if (ret == 0) {
+          pal_set_m2_prsnt(slot_id, dev_id, 0);
+        } else {
+          return ret;
+        }
 
         sleep(DELAY_POWER_CYCLE);
 
-        return bic_set_dev_power_status(slot_id, dev_id, 1);
+        ret = bic_set_dev_power_status(slot_id, dev_id, 1);
+        if (ret == 0) {
+          pal_set_m2_prsnt(slot_id, dev_id, 1);
+        }
+        return ret;
 
       } else if (status == SERVER_POWER_OFF) {
 
-        return (bic_set_dev_power_status(slot_id, dev_id, 1));
+        ret = bic_set_dev_power_status(slot_id, dev_id, 1);
+        if (ret == 0) {
+          pal_set_m2_prsnt(slot_id, dev_id, 1);
+        }
+        return ret;
       }
       break;
 
@@ -2473,7 +2578,6 @@ pal_set_server_power(uint8_t slot_id, uint8_t cmd) {
   bool gs_flag = false;
   uint8_t pair_slot_id;
   int pair_set_type=-1;
-  uint8_t server_type = 0xFF;
 
   if (slot_id < 1 || slot_id > 4) {
     return -1;
@@ -2552,11 +2656,12 @@ pal_set_server_power(uint8_t slot_id, uint8_t cmd) {
       break;
 
     case SERVER_GRACEFUL_SHUTDOWN:
-      if (status == SERVER_POWER_OFF)
+      if (status == SERVER_POWER_OFF) {
         return 1;
-      else
+      } else {
         gs_flag = true;
         return server_power_off(slot_id, gs_flag);
+      }
       break;
 
     case SERVER_12V_ON:
@@ -2891,7 +2996,7 @@ set_usb_mux(uint8_t state) {
   }
 
   // This GPIO Pin is active low
-  if (!val == state)
+  if ((!val) == state)
     return 0;
 
   if (state)
@@ -3125,7 +3230,6 @@ uart_exit:
 int
 pal_post_enable(uint8_t slot) {
   int ret;
-  int i;
   bic_config_t config = {0};
   bic_config_u *t = (bic_config_u *) &config;
 
@@ -3155,7 +3259,6 @@ pal_post_enable(uint8_t slot) {
 int
 pal_post_disable(uint8_t slot) {
   int ret;
-  int i;
   bic_config_t config = {0};
   bic_config_u *t = (bic_config_u *) &config;
 
@@ -3180,7 +3283,6 @@ pal_post_get_last(uint8_t slot, uint8_t *status) {
   int ret;
   uint8_t buf[MAX_IPMB_RES_LEN] = {0x0};
   uint8_t len;
-  int i;
 
   ret = bic_get_post_buf(slot, buf, &len);
   if (ret) {
@@ -3244,15 +3346,26 @@ pal_get_fru_id(char *str, uint8_t *fru) {
 }
 
 int
-pal_get_dev_id(char *str, uint8_t *fru) {
+pal_get_dev_id(char *str, uint8_t *dev) {
 
-  return fby2_common_dev_id(str, fru);
+  return fby2_common_dev_id(str, dev);
 }
 
 int
 pal_get_fru_name(uint8_t fru, char *name) {
 
   return fby2_common_fru_name(fru, name);
+}
+
+int
+pal_get_dev_name(uint8_t fru, uint8_t dev, char *name)
+{
+  int ret = fby2_get_fruid_name(fru, name);
+  if (ret < 0)
+    return ret;
+
+  sprintf(name, "%s Device %u", name, dev-1);
+  return 0;
 }
 
 int
@@ -3263,9 +3376,6 @@ pal_get_fru_sdr_path(uint8_t fru, char *path) {
 int
 pal_get_fru_sensor_list(uint8_t fru, uint8_t **sensor_list, int *cnt) {
 
-  int ret = -1;
-  uint8_t server_type = 0xFF;
-
   switch(fru) {
     case FRU_SLOT1:
     case FRU_SLOT2:
@@ -3273,8 +3383,10 @@ pal_get_fru_sensor_list(uint8_t fru, uint8_t **sensor_list, int *cnt) {
     case FRU_SLOT4:
       switch(fby2_get_slot_type(fru))
       {
-        case SLOT_TYPE_SERVER:
+        case SLOT_TYPE_SERVER: {
 #if defined(CONFIG_FBY2_RC) || defined(CONFIG_FBY2_EP)
+            uint8_t server_type = 0xFF;
+            int ret = -1;
             ret = fby2_get_server_type(fru, &server_type);
             if (ret) {
               syslog(LOG_ERR, "%s, Get server type failed\n", __func__);
@@ -3306,6 +3418,7 @@ pal_get_fru_sensor_list(uint8_t fru, uint8_t **sensor_list, int *cnt) {
             *sensor_list = (uint8_t *) bic_sensor_list;
             *cnt = bic_sensor_cnt;
 #endif
+            }
             break;
         case SLOT_TYPE_CF:
             *sensor_list = (uint8_t *) dc_cf_sensor_list;
@@ -3345,8 +3458,10 @@ pal_get_fru_sensor_list(uint8_t fru, uint8_t **sensor_list, int *cnt) {
 }
 
 int
-pal_read_nic_fruid(const char *path, int size) {  // for 1-byte offset length
+pal_read_nic_fruid(const char *path, int size) {
   uint8_t wbuf[8], rbuf[32];
+  uint8_t offs_len, addr;
+  char *bus;
   int offset, count;
   int fd = -1, dev = -1, ret = -1;
 
@@ -3355,15 +3470,30 @@ pal_read_nic_fruid(const char *path, int size) {  // for 1-byte offset length
     goto error_exit;
   }
 
-  dev = open("/dev/i2c-12", O_RDWR);
+  if (pal_is_ocp30_nic()) {
+    bus = "/dev/i2c-11";
+    addr = 0xA0;
+    offs_len = 2;
+  } else {
+    bus = "/dev/i2c-12";
+    addr = 0xA2;
+    offs_len = (fby2_get_nic_mfgid() == MFG_BROADCOM) ? 1 : 2;
+  }
+
+  dev = open(bus, O_RDWR);
   if (dev < 0) {
     goto error_exit;
   }
 
   // Read chunks of FRUID binary data in a loop
   for (offset = 0; offset < size; offset += 8) {
-    wbuf[0] = offset;
-    ret = i2c_rdwr_msg_transfer(dev, 0xA2, wbuf, 1, rbuf, 8);
+    if (offs_len == 2) {
+      wbuf[0] = offset >> 8;
+      wbuf[1] = offset;
+    } else {
+      wbuf[0] = offset;
+    }
+    ret = i2c_rdwr_msg_transfer(dev, addr, wbuf, offs_len, rbuf, 8);
     if (ret) {
       break;
     }
@@ -3388,8 +3518,10 @@ error_exit:
 }
 
 static int
-_write_nic_fruid(const char *path) {  // for 1-byte offset length
+_write_nic_fruid(const char *path) {
   uint8_t wbuf[32];
+  uint8_t offs_len, addr;
+  char *bus;
   int offset, count;
   int fd = -1, dev = -1, ret = -1;
 
@@ -3398,7 +3530,17 @@ _write_nic_fruid(const char *path) {  // for 1-byte offset length
     goto error_exit;
   }
 
-  dev = open("/dev/i2c-12", O_RDWR);
+  if (pal_is_ocp30_nic()) {
+    bus = "/dev/i2c-11";
+    addr = 0xA0;
+    offs_len = 2;
+  } else {
+    bus = "/dev/i2c-12";
+    addr = 0xA2;
+    offs_len = (fby2_get_nic_mfgid() == MFG_BROADCOM) ? 1 : 2;
+  }
+
+  dev = open(bus, O_RDWR);
   if (dev < 0) {
     goto error_exit;
   }
@@ -3406,13 +3548,18 @@ _write_nic_fruid(const char *path) {  // for 1-byte offset length
   // Write chunks of FRUID binary data in a loop
   offset = 0;
   while (1) {
-    count = read(fd, &wbuf[1], 8);
+    count = read(fd, &wbuf[offs_len], 8);
     if (count <= 0) {
       break;
     }
 
-    wbuf[0] = offset;
-    ret = i2c_rdwr_msg_transfer(dev, 0xA2, wbuf, count+1, NULL, 0);
+    if (offs_len == 2) {
+      wbuf[0] = offset >> 8;
+      wbuf[1] = offset;
+    } else {
+      wbuf[0] = offset;
+    }
+    ret = i2c_rdwr_msg_transfer(dev, addr, wbuf, count+offs_len, NULL, 0);
     if (ret) {
       break;
     }
@@ -3611,7 +3758,7 @@ pal_sensor_read_raw(uint8_t fru, uint8_t sensor_num, void *value) {
                 // fscd not start yet or fscd hangs up at the first run
                 syslog(LOG_WARNING, "fscd not start yet or fscd hangs up at the first run");
                 current_counter = 0;
-                post_end_counter = -1;
+                post_end_counter = POST_END_COUNTER_SHOW_LOG;
                 // fscd watchdog counter update
                 fscd_watchdog_counter = 1;
               } else {
@@ -3692,7 +3839,9 @@ pal_check_fscd_watchdog() {
   long counter = pal_get_fscd_counter();
   if ((post_end_counter < 0) && counter) {
     //fscd start working after post end
-    syslog(LOG_WARNING, "fscd start working after POST end");
+    if (post_end_counter == POST_END_COUNTER_SHOW_LOG) {
+      syslog(LOG_WARNING, "fscd start working after POST end");
+    }
     post_end_counter = counter;
   }
 }
@@ -3714,8 +3863,6 @@ pal_ignore_thresh(uint8_t fru, uint8_t snr_num, uint8_t thresh) {
 int
 pal_sensor_threshold_flag(uint8_t fru, uint8_t snr_num, uint16_t *flag) {
 
-  int ret;
-  uint8_t server_type = 0xFF;
 
   switch(fru) {
     case FRU_SLOT1:
@@ -3724,6 +3871,8 @@ pal_sensor_threshold_flag(uint8_t fru, uint8_t snr_num, uint16_t *flag) {
     case FRU_SLOT4:
       if (fby2_get_slot_type(fru) == SLOT_TYPE_SERVER) {
 #ifdef CONFIG_FBY2_RC
+        int ret;
+        uint8_t server_type = 0xFF;
         ret = fby2_get_server_type(fru, &server_type);
         if (ret) {
           syslog(LOG_INFO, "%s, Get server type failed, using Twinlake");
@@ -3937,14 +4086,14 @@ pal_get_fru_devtty(uint8_t fru, char *devtty) {
 
 void
 pal_dump_key_value(void) {
-  int i;
+  int i = 0;
   int ret;
 
   char value[MAX_VALUE_LEN] = {0x0};
 
   while (strcmp(key_cfg[i].name, LAST_KEY)) {
     printf("%s:", key_cfg[i].name);
-    if (ret = kv_get(key_cfg[i].name, value, NULL, KV_FPERSIST) < 0) {
+    if ((ret = kv_get(key_cfg[i].name, value, NULL, KV_FPERSIST)) < 0) {
       printf("\n");
     } else {
       printf("%s\n",  value);
@@ -3998,15 +4147,14 @@ pal_get_last_pwr_state(uint8_t fru, char *state) {
       sprintf(state, "on");
       return 0;
   }
+  return -1;
 }
 
 // Write GUID into EEPROM
 static int
 pal_set_guid(uint16_t offset, char *guid) {
   int fd = 0;
-  uint64_t tmp[GUID_SIZE];
   ssize_t bytes_wr;
-  int i = 0;
 
   errno = 0;
 
@@ -4045,7 +4193,6 @@ err_exit:
 static int
 pal_get_guid(uint16_t offset, char *guid) {
   int fd = 0;
-  uint64_t tmp[GUID_SIZE];
   ssize_t bytes_rd;
 
   errno = 0;
@@ -4157,8 +4304,6 @@ pal_populate_guid(uint8_t *guid, char *str) {
 
 int
 pal_set_sys_guid(uint8_t slot, char *str) {
-  int ret;
-  int i=0;
   uint8_t guid[GUID_SIZE] = {0x00};
 
   pal_populate_guid(guid, str);
@@ -4168,9 +4313,7 @@ pal_set_sys_guid(uint8_t slot, char *str) {
 
 int
 pal_get_sys_guid(uint8_t slot, char *guid) {
-  int ret;
-
-  return bic_get_sys_guid(slot, guid);
+  return bic_get_sys_guid(slot, (uint8_t *)guid);
 }
 
 int
@@ -4199,6 +4342,10 @@ pal_get_sysfw_ver(uint8_t slot, uint8_t *ver) {
   char key[MAX_KEY_LEN] = {0};
   char str[MAX_VALUE_LEN] = {0};
   char tstr[4] = {0};
+
+  if (!pal_is_slot_server(slot)) {
+    return -1;
+  }
 
   sprintf(key, "sysfw_ver_slot%d", (int) slot);
 
@@ -4268,8 +4415,6 @@ pal_is_bmc_por(void) {
 
 int
 pal_get_fru_discrete_list(uint8_t fru, uint8_t **sensor_list, int *cnt) {
-  int ret = -1;
-  uint8_t server_type = 0xFF;
 
   switch(fru) {
     case FRU_SLOT1:
@@ -4278,6 +4423,8 @@ pal_get_fru_discrete_list(uint8_t fru, uint8_t **sensor_list, int *cnt) {
     case FRU_SLOT4:
       if (pal_is_slot_server(fru)) {
 #if defined(CONFIG_FBY2_RC)
+        int ret = -1;
+        uint8_t server_type = 0xFF;
         ret = fby2_get_server_type(fru, &server_type);
         if (ret) {
           syslog(LOG_ERR, "%s, Get server type failed", __func__);
@@ -4529,8 +4676,6 @@ int
 pal_get_event_sensor_name(uint8_t fru, uint8_t *sel, char *name) {
   uint8_t snr_type = sel[10];
   uint8_t snr_num = sel[11];
-  uint8_t server_type = 0xFF;
-  int ret = -1;
 
   // If SNR_TYPE is OS_BOOT, sensor name is OS
   switch (snr_type) {
@@ -4546,18 +4691,22 @@ pal_get_event_sensor_name(uint8_t fru, uint8_t *sel, char *name) {
   }
 
 #if defined(CONFIG_FBY2_RC)
-  ret = fby2_get_server_type(fru, &server_type);
-  if (ret) {
-    syslog(LOG_ERR, "%s, Get server type failed\n", __func__);
-  }
-  switch(server_type){
-    case SERVER_TYPE_RC:
-      if(fby2_rc_event_sensor_name(fru, snr_num, name) == 0) {
-        return 0;
-      }
-      break;
-    case SERVER_TYPE_TL:
-      break;
+  {
+    uint8_t server_type = 0xFF;
+    int ret = -1;
+    ret = fby2_get_server_type(fru, &server_type);
+    if (ret) {
+      syslog(LOG_ERR, "%s, Get server type failed\n", __func__);
+    }
+    switch(server_type){
+      case SERVER_TYPE_RC:
+        if(fby2_rc_event_sensor_name(fru, snr_num, name) == 0) {
+          return 0;
+        }
+        break;
+      case SERVER_TYPE_TL:
+        break;
+    }
   }
 #endif
 
@@ -4576,12 +4725,13 @@ pal_store_crashdump(uint8_t fru, bool ierr) {
   }
 
   memset(cmd, 0, sizeof(cmd));
-  sprintf(cmd, "sys_runtime=$(awk '{print $1}' /proc/uptime) ; sys_runtime=$(printf \"%0.f\" $sys_runtime) ; echo $((sys_runtime+1200)) > /tmp/cache_store/fru%d_crashdump", fru);
+  sprintf(cmd, "sys_runtime=$(awk '{print $1}' /proc/uptime) ; sys_runtime=$(printf \"%%0.f\" $sys_runtime) ; echo $((sys_runtime+1200)) > /tmp/cache_store/fru%d_crashdump", fru);
   system(cmd);
 
   return fby2_common_crashdump(fru, ierr, false);
 }
 
+#if defined(CONFIG_FBY2_RC) || defined(CONFIG_FBY2_EP)
 static int
 pal_store_cpld_dump(uint8_t fru) {
   return fby2_common_cpld_dump(fru);
@@ -4591,6 +4741,7 @@ static int
 pal_store_sboot_cpld_dump(uint8_t fru) {
   return fby2_common_sboot_cpld_dump(fru);
 }
+#endif
 
 int
 pal_sel_handler(uint8_t fru, uint8_t snr_num, uint8_t *event_data) {
@@ -4598,8 +4749,6 @@ pal_sel_handler(uint8_t fru, uint8_t snr_num, uint8_t *event_data) {
   char key[MAX_KEY_LEN] = {0};
   char cvalue[MAX_VALUE_LEN] = {0};
   static int assert_cnt[FBY2_MAX_NUM_SLOTS] = {0};
-  int ret;
-  uint8_t server_type = 0xFF;
 
   /* For every SEL event received from the BIC, set the critical LED on */
   switch(fru) {
@@ -4607,7 +4756,10 @@ pal_sel_handler(uint8_t fru, uint8_t snr_num, uint8_t *event_data) {
     case FRU_SLOT2:
     case FRU_SLOT3:
     case FRU_SLOT4:
+    {
 #if defined(CONFIG_FBY2_RC) || defined(CONFIG_FBY2_EP)
+      int ret;
+      uint8_t server_type = 0xFF;
       ret = fby2_get_server_type(fru, &server_type);
       if (ret) {
         syslog(LOG_ERR, "%s, Get server type failed for slot%u", __func__, fru);
@@ -4675,7 +4827,7 @@ pal_sel_handler(uint8_t fru, uint8_t snr_num, uint8_t *event_data) {
       }
       sprintf(cvalue, "%s", (assert_cnt[fru] > 0) ? "0" : "1");
       break;
-
+    }
     case FRU_SPB:
       return 0;
 
@@ -4752,7 +4904,7 @@ pal_parse_sel_rc(uint8_t fru, uint8_t *sel, char *error_log)
       parsed = true;
       break;
     case BIC_RC_SENSOR_THROTTLE_STATUS:
-      strcpy(error_log, ""); 
+      strcpy(error_log, "");
       switch (ed[0]) {
         case 0x00:
           strcat(error_log, "INA230_Throttle");
@@ -4764,7 +4916,7 @@ pal_parse_sel_rc(uint8_t fru, uint8_t *sel, char *error_log)
           strcat(error_log, "DDR3_Event_Throttle");
           break;
         case 0x03:
-          strcat(error_log, "DDR4_Event_Throttle"); 
+          strcat(error_log, "DDR4_Event_Throttle");
           break;
         case 0x04:
           strcat(error_log, "DDR5_Event_Throttle");
@@ -4789,7 +4941,7 @@ pal_parse_sel_rc(uint8_t fru, uint8_t *sel, char *error_log)
           break;
         default:
           strcat(error_log, "Unknown");
-          break;      
+          break;
       }
       parsed = true;
       break;
@@ -5366,7 +5518,6 @@ pal_is_post_time_out() {
   int ret;
   clock_gettime(CLOCK_MONOTONIC,&ts);
   current_timestamp = ts.tv_sec;
-  uint8_t is_post_time_out = 0;
 
   for (int fru=1;fru <= 4;fru++) {
     ret = pal_get_post_start_timestamp(fru, &post_start_timestamp);
@@ -5551,17 +5702,6 @@ pal_get_fan_name(uint8_t num, char *name) {
 }
 
 static int
-read_fan_value(const int fan, const char *device, int *value) {
-  char device_name[LARGEST_DEVICE_NAME];
-  char output_value[LARGEST_DEVICE_NAME];
-  char full_name[LARGEST_DEVICE_NAME];
-
-  snprintf(device_name, LARGEST_DEVICE_NAME, device, fan);
-  snprintf(full_name, LARGEST_DEVICE_NAME, "%s/%s", PWM_DIR,device_name);
-  return read_device(full_name, value);
-}
-
-static int
 write_fan_value(const int fan, const char *device, const int value) {
   char full_name[LARGEST_DEVICE_NAME];
   char device_name[LARGEST_DEVICE_NAME];
@@ -5589,7 +5729,7 @@ pal_set_fan_speed(uint8_t fan, uint8_t pwm) {
 
   // For 0%, turn off the PWM entirely
   if (unit == 0) {
-    write_fan_value(fan, "pwm%d_en", 0);
+    ret = write_fan_value(fan, "pwm%d_en", 0);
     if (ret < 0) {
       syslog(LOG_INFO, "set_fan_speed: write_fan_value failed");
       return -1;
@@ -5633,8 +5773,10 @@ pal_get_fan_speed(uint8_t fan, int *rpm) {
    int ret;
    float value;
 
-   // Redirect FAN to sensor cache
+   // Read sensor cache
    ret = sensor_cache_read(FRU_SPB, SP_SENSOR_FAN0_TACH + fan, &value);
+   if (ret != 0) // Read sensor value
+      ret = sensor_raw_read(FRU_SPB, SP_SENSOR_FAN0_TACH + fan, &value);
 
    if (0 == ret)
       *rpm = (int) value;
@@ -5650,7 +5792,7 @@ pal_update_ts_sled()
   struct timespec ts;
 
   clock_gettime(CLOCK_REALTIME, &ts);
-  sprintf(tstr, "%d", ts.tv_sec);
+  sprintf(tstr, "%ld", ts.tv_sec);
 
   sprintf(key, "timestamp_sled");
 
@@ -5942,12 +6084,12 @@ int
 pal_set_dev_guid(uint8_t slot, char *guid) {
       pal_populate_guid(g_dev_guid, guid);
 
-      return pal_set_guid(OFFSET_DEV_GUID, g_dev_guid);
+      return pal_set_guid(OFFSET_DEV_GUID, (char *)g_dev_guid);
 }
 
 int
 pal_get_dev_guid(uint8_t fru, char *guid) {
-      pal_get_guid(OFFSET_DEV_GUID, g_dev_guid);
+      pal_get_guid(OFFSET_DEV_GUID, (char *)g_dev_guid);
       memcpy(guid, g_dev_guid, GUID_SIZE);
 
       return 0;
@@ -6601,7 +6743,7 @@ pal_sensor_assert_handle(uint8_t fru, uint8_t snr_num, float val, uint8_t thresh
         }
 #endif
       } else if (slot_type == SLOT_TYPE_GPV2) {
-#if defined(CONFIG_FBY2_GPV2) 
+#if defined(CONFIG_FBY2_GPV2)
         switch (snr_num) {
           case GPV2_SENSOR_P12V_BIC_SCALED:
           case GPV2_SENSOR_P3V3_STBY_BIC_SCALED:
@@ -6873,7 +7015,7 @@ pal_sensor_deassert_handle(uint8_t fru, uint8_t snr_num, float val, uint8_t thre
         }
 #endif
       } else if (slot_type == SLOT_TYPE_GPV2) {
-#if defined(CONFIG_FBY2_GPV2) 
+#if defined(CONFIG_FBY2_GPV2)
         switch (snr_num) {
           case GPV2_SENSOR_P12V_BIC_SCALED:
           case GPV2_SENSOR_P3V3_STBY_BIC_SCALED:
@@ -7089,7 +7231,9 @@ pal_get_fw_info(uint8_t fru, unsigned char target, unsigned char* res, unsigned 
         break;
     }
   } else {
-    pal_get_sysfw_ver(fru, res);
+    if (pal_get_sysfw_ver(fru, res)) {
+      return -1;
+    }
     *res_len = SIZE_SYSFW_VER;
   }
 
@@ -7126,7 +7270,7 @@ pal_get_status(void) {
   char str_server_por_cfg[64];
   char buff[MAX_VALUE_LEN] = {0};
   int policy = 3;
-  uint8_t status, data, ret;
+  uint8_t data;
 
   // Platform Power Policy
   memset(str_server_por_cfg, 0 , sizeof(char) * 64);
@@ -7149,6 +7293,73 @@ pal_get_status(void) {
   return data;
 }
 
+int
+pal_send_nl_msg(NCSI_NL_MSG_T *nl_msg, NCSI_NL_RSP_T *rcv_buf)
+{
+  int sock_fd, ret;
+  struct sockaddr_nl src_addr, dest_addr;
+  struct nlmsghdr *nlh = NULL;
+  struct iovec iov;
+  struct msghdr msg;
+  int req_msg_size = offsetof(NCSI_NL_MSG_T, msg_payload) + nl_msg->payload_length;
+  int msg_size = max(sizeof(NCSI_NL_RSP_T), req_msg_size);
+
+  /* open NETLINK socket to send message to kernel */
+  sock_fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_USER);
+  if(sock_fd < 0)  {
+    syslog(LOG_ERR, "%s Error: failed to allocate socket", __func__);
+    return -1;
+  }
+
+  memset(&src_addr, 0, sizeof(src_addr));
+  src_addr.nl_family = AF_NETLINK;
+  src_addr.nl_pid = getpid(); /* self pid */
+
+  bind(sock_fd, (struct sockaddr*)&src_addr, sizeof(src_addr));
+  memset(&dest_addr, 0, sizeof(dest_addr));
+  dest_addr.nl_family = AF_NETLINK;
+  dest_addr.nl_pid = 0; /* For Linux Kernel */
+  dest_addr.nl_groups = 0; /* unicast */
+
+  nlh = (struct nlmsghdr *)malloc(NLMSG_SPACE(msg_size));
+  if (!nlh) {
+    syslog(LOG_ERR, "%s Error, failed to allocate message buffer", __func__);
+    goto close_and_exit;
+  }
+  memset(nlh, 0, NLMSG_SPACE(msg_size));
+  nlh->nlmsg_len = NLMSG_SPACE(req_msg_size);
+  nlh->nlmsg_pid = getpid();
+  nlh->nlmsg_flags = 0;
+
+  /* the actual NC-SI command from user */
+  memcpy(NLMSG_DATA(nlh), nl_msg, req_msg_size);
+
+  iov.iov_base = (void *)nlh;
+  iov.iov_len = nlh->nlmsg_len;
+
+  memset(&msg, 0, sizeof(msg));
+  msg.msg_name = (void *)&dest_addr;
+  msg.msg_namelen = sizeof(dest_addr);
+  msg.msg_iov = &iov;
+  msg.msg_iovlen = 1;
+
+  ret = sendmsg(sock_fd,&msg,0);
+  if (ret == -1) {
+    syslog(LOG_ERR, "%s Error: errno=%d",__func__ ,errno);
+  }
+
+  /* Read message from kernel */
+  iov.iov_len = NLMSG_SPACE(msg_size);
+  recvmsg(sock_fd, &msg, 0);
+  memcpy(rcv_buf, (NCSI_NL_RSP_T *)NLMSG_DATA(nlh), sizeof(NCSI_NL_RSP_T));
+
+  free(nlh);
+close_and_exit:
+  close(sock_fd);
+
+  return 0;
+}
+
 // OEM Command "CMD_OEM_BYPASS_CMD" 0x34
 int pal_bypass_cmd(uint8_t slot, uint8_t *req_data, uint8_t req_len, uint8_t *res_data, uint8_t *res_len){
   int ret;
@@ -7158,6 +7369,13 @@ int pal_bypass_cmd(uint8_t slot, uint8_t *req_data, uint8_t req_len, uint8_t *re
   uint8_t tbuf[256] = {0x00};
   uint8_t rbuf[256] = {0x00};
   uint8_t status;
+  NCSI_NL_MSG_T *msg = NULL;
+  NCSI_NL_RSP_T *rcv_buf = NULL;
+  uint8_t channel = 0;
+  uint8_t netdev = 0;
+  uint8_t netenable = 0;
+  char sendcmd[128] = {0};
+  int i;
 
   *res_len = 0;
 
@@ -7183,46 +7401,137 @@ int pal_bypass_cmd(uint8_t slot, uint8_t *req_data, uint8_t req_len, uint8_t *re
   }
 
   select = req_data[0];
-  netfn = req_data[1];
-  cmd = req_data[2];
-  tlen = req_len - 6; // payload_id, netfn, cmd, data[0] (select), data[1] (bypass netfn), data[2] (bypass cmd)
 
-  if (tlen < 0)
-    return completion_code;
+  switch (select) {
+    case BYPASS_BIC:
+      tlen = req_len - 6; // payload_id, netfn, cmd, data[0] (select), data[1] (bypass netfn), data[2] (bypass cmd)
+      if (tlen < 0) {
+        completion_code = CC_INVALID_LENGTH;
+        break;
+      }
 
-  if (0 == select) { //BIC
-    // Bypass command to Bridge IC
-    if (tlen != 0) {
-      ret = bic_ipmb_wrapper(slot, netfn, cmd, &req_data[3], tlen, res_data, res_len);
-    } else {
-      ret = bic_ipmb_wrapper(slot, netfn, cmd, NULL, 0, res_data, res_len);
-    }
+      netfn = req_data[1];
+      cmd = req_data[2];
 
-    if (0 == ret)
+      // Bypass command to Bridge IC
+      if (tlen != 0) {
+        ret = bic_ipmb_wrapper(slot, netfn, cmd, &req_data[3], tlen, res_data, res_len);
+      } else {
+        ret = bic_ipmb_wrapper(slot, netfn, cmd, NULL, 0, res_data, res_len);
+      }
+
+      if (0 == ret) {
+        completion_code = CC_SUCCESS;
+      }
+      break;
+    case BYPASS_ME:
+      tlen = req_len - 6; // payload_id, netfn, cmd, data[0] (select), data[1] (bypass netfn), data[2] (bypass cmd)
+      if (tlen < 0) {
+        completion_code = CC_INVALID_LENGTH;
+        break;
+      }
+
+      netfn = req_data[1];
+      cmd = req_data[2];
+
+      tlen += 2;
+      memcpy(tbuf, &req_data[1], tlen);
+      tbuf[0] = tbuf[0] << 2;
+
+      // Bypass command to ME
+      ret = bic_me_xmit(slot, tbuf, tlen, rbuf, &rlen);
+      if (0 == ret) {
+        completion_code = rbuf[0];
+        memcpy(&res_data[0], &rbuf[1], (rlen - 1));
+        *res_len = rlen - 1;
+      }
+      break;
+    case BYPASS_IMC:
+      tlen = req_len - 6; // payload_id, netfn, cmd, data[0] (select), data[1] (bypass netfn), data[2] (bypass cmd)
+      if (tlen < 0) {
+        completion_code = CC_INVALID_LENGTH;
+        break;
+      }
+
+      netfn = req_data[1];
+      cmd = req_data[2];
+
+      tlen += 2;
+      memcpy(tbuf, &req_data[1], tlen);
+      tbuf[0] = tbuf[0] << 2;
+
+      // Bypass command to IMC
+      ret = bic_imc_xmit(slot, tbuf, tlen, rbuf, &rlen);
+      if (0 == ret) {
+        completion_code = rbuf[0];
+        memcpy(&res_data[0], &rbuf[1], (rlen - 1));
+        *res_len = rlen - 1;
+      }
+      break;
+    case BYPASS_NCSI:
+      tlen = req_len - 7; // payload_id, netfn, cmd, data[0] (select), netdev, channel, cmd
+      if (tlen < 0) {
+        completion_code = CC_INVALID_LENGTH;
+        break;
+      }
+
+      netdev = req_data[1];
+      channel = req_data[2];
+      cmd = req_data[3];
+
+      msg = calloc(1, sizeof(NCSI_NL_MSG_T));
+      rcv_buf = calloc(1, sizeof(NCSI_NL_RSP_T));
+
+      if (!msg || !rcv_buf) {
+        syslog(LOG_ERR, "%s Error: failed buffer allocation", __func__);
+        break;
+      }
+      memset(msg, 0, sizeof(NCSI_NL_MSG_T));
+      memset(msg, 0, sizeof(NCSI_NL_RSP_T));
+
+      sprintf(msg->dev_name, "eth%d", netdev);
+      msg->channel_id = channel;
+      msg->cmd = cmd;
+      msg->payload_length = tlen;
+
+      for (i=0; i<msg->payload_length; i++) {
+        msg->msg_payload[i] = req_data[4+i];
+      }
+
+      pal_send_nl_msg(msg, rcv_buf);
+
+      memcpy(&res_data[0], &rcv_buf->msg_payload[0], rcv_buf->hdr.payload_length);
+      *res_len = rcv_buf->hdr.payload_length;
+
+      free(msg);
+      free(rcv_buf);
       completion_code = CC_SUCCESS;
+      break;
+    case BYPASS_NETWORK:
+      tlen = req_len - 6; // payload_id, netfn, cmd, data[0] (select), netdev, netenable
+      if (tlen != 0) {
+        completion_code = CC_INVALID_LENGTH;
+        break;
+      }
 
-  } else if (1 == select) { //ME
-    tlen += 2;
-    memcpy(tbuf, &req_data[1], tlen);
-    tbuf[0] = tbuf[0] << 2;
-    // Bypass command to ME
-    ret = bic_me_xmit(slot, tbuf, tlen, rbuf, &rlen);
-    if (0 == ret) {
-       completion_code = rbuf[0];
-       memcpy(&res_data[0], &rbuf[1], (rlen - 1));
-       *res_len = rlen - 1;
-    }
-  } else if (2 == select) { //IMC
-    tlen += 2;
-    memcpy(tbuf, &req_data[1], tlen);
-    tbuf[0] = tbuf[0] << 2;
-    // Bypass command to IMC
-    ret = bic_imc_xmit(slot, tbuf, tlen, rbuf, &rlen);
-    if (0 == ret) {
-       completion_code = rbuf[0];
-       memcpy(&res_data[0], &rbuf[1], (rlen - 1));
-       *res_len = rlen - 1;
-    }
+      netdev = req_data[1];
+      netenable = req_data[2];
+
+      if (netenable) {
+        if (netenable > 1) {
+          completion_code = CC_INVALID_PARAM;
+          break;
+        }
+
+        sprintf(sendcmd, "ifup eth%d", netdev);
+      } else {
+        sprintf(sendcmd, "ifdown eth%d", netdev);
+      }
+      system(sendcmd);
+      completion_code = CC_SUCCESS;
+      break;
+    default:
+      return completion_code;
   }
 
   return completion_code;
@@ -7463,6 +7772,7 @@ pal_is_fw_update_ongoing_system(void) {
   return false;
 }
 
+int
 pal_set_fw_update_ongoing(uint8_t fruid, uint16_t tmout) {
   char key[64] = {0};
   char value[64] = {0};
@@ -7499,7 +7809,7 @@ pal_ipmb_processing(int bus, void *buf, uint16_t size) {
       ts.tv_sec += 30;
 
       sprintf(key, "ocpdbg_lcd");
-      sprintf(value, "%d", ts.tv_sec);
+      sprintf(value, "%ld", ts.tv_sec);
       if (kv_set(key, value, 0, 0) < 0) {
         return -1;
       }
@@ -7881,7 +8191,7 @@ processor_ras_sel_parse(uint8_t slot, char *error_log, uint8_t *sel, char *crise
       break;
     default:
       sprintf(temp_log, " Section Sub-type: Unknown(0x%x),", section_sub_type);
-      sprintf(crisel_local, "Processor %s Unknown Error,FRU:%u", slot, crisel, slot);
+      sprintf(crisel_local, "Processor %d(%s) Unknown Error,FRU:%u", slot, crisel, slot);
       break;
   }
   strcat(error_log, temp_log);
@@ -8638,8 +8948,15 @@ memory_error_sec_sel_parse(uint8_t slot, uint8_t *req_data, uint8_t req_len)
   strcpy(temp_log, "");
 
   if (req_data[25] & 0x2) {
-    phy_address = req_data[48] << 56 | req_data[47] << 48 | req_data[46] << 40 | req_data[45] << 32 | req_data[44] << 24 | req_data[43] << 16 | req_data[42] << 8 | req_data[41];
-    sprintf(temp_log, "Phy_address:0x%x, ", phy_address);
+    phy_address = (uint64_t)req_data[48] << 56 |
+                  (uint64_t)req_data[47] << 48 |
+                  (uint64_t)req_data[46] << 40 |
+                  (uint64_t)req_data[45] << 32 |
+                  (uint64_t)req_data[44] << 24 |
+                  (uint64_t)req_data[43] << 16 |
+                  (uint64_t)req_data[42] << 8 |
+                  (uint64_t)req_data[41];
+    sprintf(temp_log, "Phy_address:0x%llx, ", phy_address);
     strcat(error_log, temp_log);
     strcpy(temp_log, "");
   }
@@ -8723,13 +9040,13 @@ memory_error_sec_sel_parse(uint8_t slot, uint8_t *req_data, uint8_t req_len)
     strcpy(temp_log, "");
   }
   if(card == 0 && module == 0)
-    sprintf(temp_log, "Location: DIMM:A", rank);
+    sprintf(temp_log, "Location: DIMM:A");
   else if(card == 2 && module == 0)
-    sprintf(temp_log, "Location: DIMM:B", rank);
+    sprintf(temp_log, "Location: DIMM:B");
   else if(card == 3 && module == 0)
-    sprintf(temp_log, "Location: DIMM:C", rank);
+    sprintf(temp_log, "Location: DIMM:C");
   else if(card == 1 && module == 0)
-    sprintf(temp_log, "Location: DIMM:D", rank);
+    sprintf(temp_log, "Location: DIMM:D");
   strcat(error_log, temp_log);
   strcpy(temp_log, "");
 
@@ -8763,7 +9080,6 @@ pal_add_imc_log(uint8_t slot, uint8_t *req_data, uint8_t req_len, uint8_t *res_d
   uint8_t completion_code = CC_UNSPECIFIED_ERROR;
   int index;
   FILE *pFile = NULL;
-  int ret;
   uint8_t status;
   uint8_t data_len;
   struct stat st;
@@ -8976,13 +9292,155 @@ void
 pal_specific_plat_fan_check(bool status)
 {
   uint8_t is_sled_out = 1;
-  if (pal_get_fan_latch(&is_sled_out) != 0) 
+  if (pal_get_fan_latch(&is_sled_out) != 0)
     syslog(LOG_WARNING, "%s: Get SLED status in/out failed", __func__);
- 
+
   if(is_sled_out == 0)
     printf("Sled Fan Latch Open: False\n");
   else
     printf("Sled Fan Latch Open: True\n");
 
   return;
+}
+
+int pal_fsc_get_target_snr(const char *sname, struct fsc_monitor *fsc_m2_list, int fsc_m2_list_size)
+{
+  int index;
+  for (index = 0; index < fsc_m2_list_size; index++)
+  {
+    if(!strcmp(sname, fsc_m2_list[index].sensor_name))
+    {
+      return index;
+    }
+  }
+
+  return PAL_ENOTSUP;
+}
+
+int
+pal_set_m2_prsnt(uint8_t slot_id, uint8_t dev_id, uint8_t present) {
+  if(fby2_get_slot_type(slot_id)==SLOT_TYPE_GPV2) {
+    char key[MAX_KEY_LEN] = {0};
+    char str[MAX_VALUE_LEN] = {0};
+    if (dev_id < 1 || dev_id > MAX_NUM_DEVS)
+      return -1;
+    //slot: 1 dev_id: 1 -> slot1_m2a_pres
+    snprintf(key,MAX_KEY_LEN, "slot%u_m2%c_pres", slot_id, 'a'+dev_id-1);
+    snprintf(str,MAX_VALUE_LEN, "%d",present);
+    syslog(LOG_WARNING, "%s: set %s to %s.", __func__, key, str);
+    return kv_set(key, str, 0, 0);
+  }
+  return -1;
+}
+
+bool pal_is_m2_prsnt(char *slot_name, char *sensor_name)
+{
+  uint8_t slot_id;
+  uint8_t runoff_id;
+  int ret;
+  struct fsc_monitor *fsc_m2_list;
+  int fsc_m2_list_size;
+  int index;
+  int fd = -1;
+  char path[64];
+  char value[MAX_VALUE_LEN] = {0};
+  uint8_t m2_present_status;
+  uint8_t read_byte = 1;
+
+  ret = pal_get_fru_id(slot_name, &slot_id);
+  if(ret){
+    syslog(LOG_WARNING, "%s: pal_get_fru_id failed for %s", __func__, slot_name);
+    return false;
+  }
+
+  if((slot_id < 1) || (slot_id > 4)) {
+    syslog(LOG_WARNING, "%s: invalid slot id %d", __func__, slot_id);
+    return false;
+  }
+
+  switch(fby2_get_slot_type(slot_id)) {
+    case SLOT_TYPE_SERVER:
+      fsc_m2_list = fsc_monitor_tl_m2_list;
+      fsc_m2_list_size = fsc_monitor_tl_m2_list_size;
+      runoff_id = slot_id;
+      break;
+    case SLOT_TYPE_GP:
+      fsc_m2_list = fsc_monitor_gp_m2_list;
+      fsc_m2_list_size = fsc_monitor_gp_m2_list_size;
+      runoff_id = slot_id + 1;
+      break;
+    case SLOT_TYPE_GPV2:
+      sprintf(path, "slot%u_xxx_pres", slot_id);
+      memcpy(path+6, sensor_name, 3);
+      if (kv_get(path, value, NULL, 0) == 0) {
+        if (atoi(value))
+          return true;
+      }
+      return false;
+    default:
+      return false;
+  }
+
+  index = pal_fsc_get_target_snr(sensor_name, fsc_m2_list, fsc_m2_list_size);
+
+  if (index < 0)
+    return true;
+
+  sprintf(path, SYS_CONFIG_PATH "fru%d_m2_%d_info", runoff_id, fsc_m2_list[index].offset);
+  fd = open(path, O_RDONLY);
+
+  if (fd < 0)
+    return false;
+
+  if(read(fd, &m2_present_status, read_byte) != read_byte)
+    return false;
+
+  switch(m2_present_status) {
+    case 0x01:     //M.2 is present
+      break;
+    case 0xFF:     //M.2 is not present
+    default:
+      close(fd);
+      return false;
+  }
+
+  close(fd);
+  return true;
+}
+
+int
+pal_get_sensor_util_timeout(uint8_t fru) {
+  switch (fru) {
+    case FRU_SLOT1:
+    case FRU_SLOT2:
+    case FRU_SLOT3:
+    case FRU_SLOT4:
+      return 10;
+    case FRU_SPB:
+    case FRU_NIC:
+    default:
+      return 4;
+  }
+}
+
+int
+pal_is_ocp30_nic(void) {
+  int prsnt_a = 0, prsnt_b = 0;
+  char path[64];
+
+  sprintf(path, GPIO_VAL, GPIO_MEZZ_PRSNTA2_N);
+  if (read_device(path, &prsnt_a)) {
+    return 0;
+  }
+
+  sprintf(path, GPIO_VAL, GPIO_MEZZ_PRSNTB2_N);
+  if (read_device(path, &prsnt_b)) {
+    return 0;
+  }
+
+  if ((prsnt_a == 0) && (prsnt_b == 1)) {
+    return 1;
+  }
+
+  return 0;
 }

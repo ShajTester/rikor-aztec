@@ -18,5 +18,8 @@
 # Boston, MA 02110-1301 USA
 #
 
+# Check OCP NIC
+sh /usr/local/bin/check_ocp_nic.sh > /dev/NULL
+
 # Get and Set slot type
 sh /usr/local/bin/check_slot_type.sh > /dev/NULL

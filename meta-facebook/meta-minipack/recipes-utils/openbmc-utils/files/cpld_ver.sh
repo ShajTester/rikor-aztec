@@ -22,28 +22,40 @@
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin
 
+dump_cpld_version() {
+    local cpld_dir=$1
+    local cpld_name=$2
+
+    cpld_ver=`head -n 1 ${cpld_dir}/cpld_ver 2> /dev/null`
+    if [ $? -ne 0 ]; then
+        echo "${cpld_name} is not detected"
+        return
+    fi
+    cpld_sub_ver=`head -n 1 ${cpld_dir}/cpld_sub_ver 2> /dev/null`
+    if [ $? -ne 0 ]; then
+        echo "${cpld_name} is not detected"
+        return
+    fi
+
+    echo "${cpld_name}: $(($cpld_ver)).$(($cpld_sub_ver))"
+}
+
+dump_cpld_version ${SMBCPLD_SYSFS_DIR} "SMBCPLD"
+usleep 50000
+
+dump_cpld_version ${SCMCPLD_SYSFS_DIR} "SCMCPLD"
+usleep 50000
+
+dump_cpld_version ${TOP_FCMCPLD_SYSFS_DIR} "Top_FCMCPLD"
+usleep 50000
+
+dump_cpld_version ${BOTTOM_FCMCPLD_SYSFS_DIR} "Bottom_FCMCPLD"
+usleep 50000
+
 board_rev=$(wedge_board_rev)
-
-smb_ver=$(cat /sys/class/i2c-adapter/i2c-12/12-003e/cpld_ver | head -n 1)
-smb_sub_ver=$(cat /sys/class/i2c-adapter/i2c-12/12-003e/cpld_sub_ver | head -n 1)
-scm_ver=$(cat /sys/class/i2c-adapter/i2c-2/2-0035/cpld_ver | head -n 1)
-scm_sub_ver=$(cat /sys/class/i2c-adapter/i2c-2/2-0035/cpld_sub_ver | head -n 1)
-fcm_top_ver=$(cat /sys/class/i2c-adapter/i2c-64/64-0033/cpld_ver | head -n 1)
-fcm_top_sub_ver=$(cat /sys/class/i2c-adapter/i2c-64/64-0033/cpld_sub_ver | head -n 1)
-fcm_bottom_ver=$(cat /sys/class/i2c-adapter/i2c-72/72-0033/cpld_ver | head -n 1)
-fcm_bottom_sub_ver=$(cat /sys/class/i2c-adapter/i2c-72/72-0033/cpld_sub_ver | head -n 1)
-
-echo "SMBCPLD: $(($smb_ver)).$(($smb_sub_ver))"
-echo "SCMCPLD: $(($scm_ver)).$(($scm_sub_ver))"
-echo "Top FCMCPLD: $(($fcm_top_ver)).$(($fcm_top_sub_ver))"
-echo "Bottom FCMCPLD: $(($fcm_bottom_ver)).$(($fcm_bottom_sub_ver))"
-
 if [ $board_rev -ne 4 ]; then
-  pdbl_ver=$(cat /sys/class/i2c-adapter/i2c-55/55-0060/cpld_ver | head -n 1)
-  pdbl_sub_ver=$(cat /sys/class/i2c-adapter/i2c-55/55-0060/cpld_sub_ver | head -n 1)
-  pdbr_ver=$(cat /sys/class/i2c-adapter/i2c-63/63-0060/cpld_ver | head -n 1)
-  pdbr_sub_ver=$(cat /sys/class/i2c-adapter/i2c-63/63-0060/cpld_sub_ver | head -n 1)
+    dump_cpld_version ${LEFT_PDBCPLD_SYSFS_DIR} "Left_PDBCPLD"
+    usleep 50000
 
-  echo "Left PDBCPLD: $(($pdbl_ver)).$(($pdbl_sub_ver))"
-  echo "Right PDBCPLD: $(($pdbr_ver)).$(($pdbr_sub_ver))"
+    dump_cpld_version ${RIGHT_PDBCPLD_SYSFS_DIR} "Right_PDBCPLD"
 fi

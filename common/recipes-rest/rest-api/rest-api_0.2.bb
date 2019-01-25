@@ -14,6 +14,9 @@
 # Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301 USA
+
+inherit python3unittest
+
 SUMMARY = "Rest API Daemon"
 DESCRIPTION = "Daemon to handle RESTful interface."
 SECTION = "base"
@@ -59,7 +62,7 @@ SRC_URI = "file://rest.py \
           "
 
 S = "${WORKDIR}"
-DEPENDS += "libpal update-rc.d-native"
+DEPENDS += "libpal update-rc.d-native python3-psutil"
 
 do_install() {
   dst="${D}/usr/local/fbpackages/${pkgdir}"

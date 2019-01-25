@@ -48,6 +48,7 @@
 #define BIOS_VER_REGION_SIZE (4*1024*1024)
 #define BIOS_VER_STR "F09_"
 #define Y2_BIOS_VER_STR "YMV2"
+#define GPV2_BIOS_VER_STR "F09B"
 
 #define BIC_UPDATE_RETRIES 12
 #define BIC_UPDATE_TIMEOUT 500
@@ -286,7 +287,6 @@ bic_ipmb_wrapper(uint8_t slot_id, uint8_t netfn, uint8_t cmd,
   uint8_t tbuf[MAX_IPMB_RES_LEN] = {0};
   uint16_t tlen = 0;
   uint8_t rlen = 0;
-  int count = 0;
   int i = 0;
   int ret;
   uint8_t bus_id;
@@ -553,6 +553,33 @@ bic_get_gpio_config(uint8_t slot_id, uint8_t gpio, bic_gpio_config_t *gpio_confi
 }
 
 int
+bic_get_gpio64_config(uint8_t slot_id, uint8_t gpio, bic_gpio_config_t *gpio_config) {
+  uint8_t tbuf[12] = {0x15, 0xA0, 0x00}; // IANA ID
+  uint8_t rbuf[8] = {0x00};
+  uint8_t rlen = 0;
+  uint64_t pin;
+  int ret;
+
+  pin = 1LL << gpio;
+
+  tbuf[3] = pin & 0xFF;
+  tbuf[4] = (pin >> 8) & 0xFF;
+  tbuf[5] = (pin >> 16) & 0xFF;
+  tbuf[6] = (pin >> 24) & 0xFF;
+  tbuf[7] = (pin >> 32) & 0xFF;
+  tbuf[8] = (pin >> 40) & 0xFF;
+  tbuf[9] = (pin >> 48) & 0xFF;
+  tbuf[10] = (pin >> 56) & 0xFF;
+
+  ret = bic_ipmb_wrapper(slot_id, NETFN_OEM_1S_REQ, CMD_OEM_1S_GET_GPIO_CONFIG, tbuf, 11, rbuf, &rlen);
+
+  // Ignore IANA ID
+  *(uint8_t *) gpio_config = rbuf[3];
+
+  return ret;
+}
+
+int
 bic_set_gpio_config(uint8_t slot_id, uint8_t gpio, bic_gpio_config_t *gpio_config) {
   uint8_t tbuf[12] = {0x15, 0xA0, 0x00}; // IANA ID
   uint8_t rbuf[4] = {0x00};
@@ -571,6 +598,31 @@ bic_set_gpio_config(uint8_t slot_id, uint8_t gpio, bic_gpio_config_t *gpio_confi
   tbuf[9] = (*(uint8_t *) gpio_config) & 0x1F;
 
   ret = bic_ipmb_wrapper(slot_id, NETFN_OEM_1S_REQ, CMD_OEM_1S_SET_GPIO_CONFIG, tbuf, 10, rbuf, &rlen);
+
+  return ret;
+}
+
+int
+bic_set_gpio64_config(uint8_t slot_id, uint8_t gpio, bic_gpio_config_t *gpio_config) {
+  uint8_t tbuf[12] = {0x15, 0xA0, 0x00}; // IANA ID
+  uint8_t rbuf[4] = {0x00};
+  uint8_t rlen = 0;
+  uint64_t pin;
+  int ret;
+
+  pin = 1LL << gpio;
+
+  tbuf[3] = pin & 0xFF;
+  tbuf[4] = (pin >> 8) & 0xFF;
+  tbuf[5] = (pin >> 16) & 0xFF;
+  tbuf[6] = (pin >> 24) & 0xFF;
+  tbuf[7] = (pin >> 32) & 0xFF;
+  tbuf[8] = (pin >> 40) & 0xFF;
+  tbuf[9] = (pin >> 48) & 0xFF;
+  tbuf[10] = (pin >> 56) & 0xFF;
+  tbuf[11] = (*(uint8_t *) gpio_config) & 0x1F;
+
+  ret = bic_ipmb_wrapper(slot_id, NETFN_OEM_1S_REQ, CMD_OEM_1S_SET_GPIO_CONFIG, tbuf, 12, rbuf, &rlen);
 
   return ret;
 }
@@ -1658,7 +1710,9 @@ check_bios_image(uint8_t slot_id, int fd, long size) {
   end = BIOS_VER_REGION_SIZE - (sizeof(ver_sig) + strlen(BIOS_VER_STR));
   for (i = 0; i < end; i++) {
     if (!memcmp(buf+i, ver_sig, sizeof(ver_sig))) {
-      if (memcmp(buf+i+sizeof(ver_sig), BIOS_VER_STR, strlen(BIOS_VER_STR)) && memcmp(buf+i+sizeof(ver_sig), Y2_BIOS_VER_STR, strlen(Y2_BIOS_VER_STR))) {
+      if (memcmp(buf+i+sizeof(ver_sig), BIOS_VER_STR, strlen(BIOS_VER_STR))
+      && memcmp(buf+i+sizeof(ver_sig), Y2_BIOS_VER_STR, strlen(Y2_BIOS_VER_STR))
+      && memcmp(buf+i+sizeof(ver_sig), GPV2_BIOS_VER_STR, strlen(GPV2_BIOS_VER_STR))){
         i = end;
       }
       break;
@@ -1683,7 +1737,7 @@ _set_fw_update_ongoing(uint8_t slot_id, uint16_t tmout) {
 
   clock_gettime(CLOCK_MONOTONIC, &ts);
   ts.tv_sec += tmout;
-  sprintf(value, "%d", ts.tv_sec);
+  sprintf(value, "%ld", ts.tv_sec);
 
   if (kv_set(key, value, 0, 0) < 0) {
      return -1;
@@ -1972,7 +2026,6 @@ bic_update_fw(uint8_t slot_id, uint8_t comp, char *path) {
       goto error_exit;
   }
 
-update_done:
   ret = 0;
 error_exit:
   printf("\n");
@@ -2082,7 +2135,6 @@ static int
 _read_fruid(uint8_t slot_id, uint8_t fru_id, uint32_t offset, uint8_t count, uint8_t *rbuf, uint8_t *rlen) {
   int ret;
   uint8_t tbuf[4] = {0};
-  uint8_t tlen = 0;
 
   tbuf[0] = fru_id;
   tbuf[1] = offset & 0xFF;
@@ -2198,11 +2250,10 @@ _write_fruid(uint8_t slot_id, uint8_t fru_id, uint32_t offset, uint8_t count, ui
 
 int
 bic_write_fruid(uint8_t slot_id, uint8_t fru_id, const char *path) {
-  int ret;
+  int ret = -1;
   uint32_t offset;
   uint8_t count;
   uint8_t buf[64] = {0};
-  uint8_t len = 0;
   int fd;
 
   // Open the file exclusively for read
@@ -2252,15 +2303,6 @@ bic_get_sel_info(uint8_t slot_id, ipmi_sel_sdr_info_t *info) {
   return ret;
 }
 
-static int
-_get_sel_rsv(uint8_t slot_id, uint16_t *rsv) {
-  int ret;
-  uint8_t rlen = 0;
-
-  ret = bic_ipmb_wrapper(slot_id, NETFN_STORAGE_REQ, CMD_STORAGE_RSV_SEL, NULL, 0, (uint8_t *) rsv, &rlen);
-  return ret;
-}
-
 int
 bic_get_sel(uint8_t slot_id, ipmi_sel_sdr_req_t *req, ipmi_sel_sdr_res_t *res, uint8_t *rlen) {
 
@@ -2283,7 +2325,7 @@ bic_get_sdr_info(uint8_t slot_id, ipmi_sel_sdr_info_t *info) {
 }
 
 static int
-_get_sdr_rsv(uint8_t slot_id, uint16_t *rsv) {
+_get_sdr_rsv(uint8_t slot_id, uint8_t *rsv) {
   int ret;
   uint8_t rlen = 0;
 
@@ -2570,6 +2612,7 @@ me_recovery(uint8_t slot_id, uint8_t command) {
     syslog(LOG_CRIT, "%s: Restore Factory Default failed..., retried: %d", __func__,  retry);
     return -1;
   }
+  return 0;
 }
 
 int
@@ -2712,6 +2755,19 @@ bic_disable_sensor_monitor(uint8_t slot_id, uint8_t dis) {
 
   tbuf[3] = dis;  // 1: disable sensor monitor; 0: enable sensor monitor
   ret = bic_ipmb_wrapper(slot_id, NETFN_OEM_1S_REQ, CMD_OEM_1S_DISABLE_SEN_MON, tbuf, 4, rbuf, &rlen);
+
+  return ret;
+}
+
+int
+bic_send_jtag_instruction(uint8_t slot_id, uint8_t dev_id, uint8_t *rbuf, uint8_t ir) {
+  uint8_t tbuf[8] = {0x15, 0xA0, 0x00}; // IANA ID
+  uint8_t rlen = 0;
+  int ret;
+
+  tbuf[3] = dev_id;  // 0-based
+  tbuf[4] = ir;
+  ret = bic_ipmb_wrapper(slot_id, NETFN_OEM_1S_REQ, 0x39, tbuf, 5, rbuf, &rlen);
 
   return ret;
 }

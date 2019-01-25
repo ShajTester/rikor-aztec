@@ -15,13 +15,13 @@
 # 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301 USA
 
-DEPENDS_append = "libipmi libfruid update-rc.d-native libsdr libgpio"
+DEPENDS += "libipmi libfruid update-rc.d-native libsdr libgpio"
+RDEPENDS_${PN} += "libipmi libfruid libsdr libgpio"
 LDFLAGS_append = "-lfruid -lipmb -lgpio"
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
 SRC_URI += "file://setup-ipmid.sh \
            file://run-ipmid.sh \
-           file://sensor.c \
            file://fruid.c \
           "
 
@@ -50,5 +50,3 @@ FBPACKAGEDIR = "${prefix}/local/fbpackages"
 
 FILES_${PN} = "${FBPACKAGEDIR}/ipmid ${prefix}/local/bin ${sysconfdir} "
 
-INHIBIT_PACKAGE_DEBUG_SPLIT = "1"
-INHIBIT_PACKAGE_STRIP = "1"

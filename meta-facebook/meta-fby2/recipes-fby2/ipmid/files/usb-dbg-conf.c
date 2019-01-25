@@ -758,24 +758,12 @@ int plat_get_me_status(uint8_t fru, char *status)
   int ret;
   uint8_t server_type = 0xFF;
 
-#if defined(CONFIG_FBY2_EP)
   if (bic_get_server_type(fru, &server_type)) {
     return -1;
   }
 
-  switch (server_type) {
-    case SERVER_TYPE_EP:
-      return -1;
-  }
-#endif
-
-  if (bic_get_server_type(fru, &server_type)) {
+  if(server_type != SERVER_TYPE_TL) {
     return -1;
-  }
-
-  switch (server_type) {
-    case SERVER_TYPE_RC:
-      return -1;
   }
 
   buf[0] = NETFN_APP_REQ << 2;
@@ -813,6 +801,10 @@ int plat_get_syscfg_text(uint8_t slot, char *text)
 
   if (text == NULL)
     return -1;
+
+  if (!pal_is_slot_server(slot)) {
+    return -1;
+  }
 
 #if defined(CONFIG_FBY2_EP) || defined(CONFIG_FBY2_RC)
   if (bic_get_server_type(slot, &server_type)) {

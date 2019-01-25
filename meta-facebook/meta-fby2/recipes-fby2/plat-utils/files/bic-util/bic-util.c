@@ -30,6 +30,7 @@
 #include <facebook/fby2_gpio.h>
 #include <facebook/fby2_sensor.h>
 #include <openbmc/ipmi.h>
+#include <openbmc/pal.h>
 #include <sys/time.h>
 #include <time.h>
 
@@ -56,6 +57,9 @@ long double cmd_profile[NUM_SLOTS][CMD_PROFILE_NUM]={0};
 static const char *option_list[] = {
   "--check_status",
   "--get_dev_id",
+#if defined(CONFIG_FBY2_GPV2)
+  "--read_jtag_id [dev]",
+#endif
   "--get_gpio",
   "--set_gpio [gpio] [val]",
   "--get_gpio_config",
@@ -88,7 +92,19 @@ util_check_status(uint8_t slot_id) {
 
   // BIC status is only valid if 12V-on. check this first
   if (!bic_is_slot_12v_on(slot_id)) {
-    printf("Server is 12V-off, unable to check BIC status\n");
+    uint8_t status;
+    ret = pal_is_fru_prsnt(slot_id, &status);
+
+    if (ret < 0) {
+       printf("unable to check BIC status\n");
+       return ret;
+    }
+
+    if (status == 0) {
+      printf("Slot is empty, unable to check BIC status\n");
+    } else {
+      printf("Slot is 12V-off, unable to check BIC status\n");
+    }
     ret = 0;
   } else {
     if (is_bic_ready(slot_id)) {
@@ -123,6 +139,21 @@ util_get_device_id(uint8_t slot_id) {
   printf("Manufacturer ID: 0x%X:0x%X:0x%X\n", id.mfg_id[2], id.mfg_id[1], id.mfg_id[0]);
   printf("Product ID: 0x%X:0x%X\n", id.prod_id[1], id.prod_id[0]);
   printf("Aux. FW Rev: 0x%X:0x%X:0x%X:0x%X\n", id.aux_fw_rev[0], id.aux_fw_rev[1],id.aux_fw_rev[2],id.aux_fw_rev[3]);
+
+  return ret;
+}
+
+static int
+util_read_jtag_id(uint8_t slot_id, uint8_t dev_id) {
+  int ret = 0;
+  uint8_t idcode[16] = {0};
+
+  ret = bic_send_jtag_instruction(slot_id, dev_id, idcode, 0x06);  // read IDCODE
+  if (ret) {
+    printf("util_get_device_id: bic_send_jtag_instruction returns %d\n", ret);
+    return ret;
+  }
+  printf("IDCODE: 0x%02X%02X%02X%02X\n", idcode[6], idcode[5], idcode[4], idcode[3]);
 
   return ret;
 }
@@ -276,7 +307,15 @@ util_get_gpio_config(uint8_t slot_id) {
 
   // Read configuration of all bits
   for (i = 0;  i < gpio_cnt; i++) {
+#if defined(CONFIG_FBY2_GPV2)
+    if (fby2_get_slot_type(slot_id) == SLOT_TYPE_GPV2) {
+      ret = bic_get_gpio64_config(slot_id, i, &gpio_config);
+    } else {
+      ret = bic_get_gpio_config(slot_id, i, &gpio_config);
+    }
+#else
     ret = bic_get_gpio_config(slot_id, i, &gpio_config);
+#endif
     if (ret == -1) {
       continue;
     }
@@ -344,7 +383,15 @@ util_set_gpio_config(uint8_t slot_id, uint8_t gpio, uint8_t config) {
   }
 
   printf("slot %d: setting GPIO %d config to 0x%02x\n", slot_id, gpio, config);
+#if defined(CONFIG_FBY2_GPV2)
+  if (fby2_get_slot_type(slot_id) == SLOT_TYPE_GPV2) {
+    ret = bic_set_gpio64_config(slot_id, gpio, (bic_gpio_config_t *)&config);
+  } else {
+    ret = bic_set_gpio_config(slot_id, gpio, (bic_gpio_config_t *)&config);
+  }
+#else
   ret = bic_set_gpio_config(slot_id, gpio, (bic_gpio_config_t *)&config);
+#endif
   if (ret) {
     printf("ERROR: bic_set_gpio_config returns %d\n", ret);
   }
@@ -503,7 +550,7 @@ util_perf_test(uint8_t slot_id, int loopCount) {
 
     ret = bic_get_dev_id(slot_id, &id);
     if (ret) {
-      printf("util_get_device_id: bic_get_dev_id returns %d, loop=%d\n", ret, i);
+      printf("util_perf_test: bic_get_dev_id returns %d, loop=%d\n", ret, i);
       return ret;
     }
 
@@ -630,7 +677,7 @@ process_file(uint8_t slot_id, char *path) {
 // TODO: Make it as User selectable tests to run
 int
 main(int argc, char **argv) {
-  uint8_t slot_id;
+  uint8_t slot_id, dev_id;
   uint8_t config;
   int ret = 0;
 
@@ -654,6 +701,15 @@ main(int argc, char **argv) {
     ret = util_check_status(slot_id);
   } else if (!strcmp(argv[2], "--get_dev_id")) {
     ret = util_get_device_id(slot_id);
+  } else if (!strcmp(argv[2], "--read_jtag_id")) {
+    if (argc < 4) {
+      goto err_exit;
+    }
+    dev_id = atoi(argv[3]);
+    if (dev_id > 11) {
+      goto err_exit;
+    }
+    ret = util_read_jtag_id(slot_id, dev_id);
   } else if (!strcmp(argv[2], "--get_gpio")) {
     util_get_gpio(slot_id);
   } else if (!strcmp(argv[2], "--set_gpio")) {

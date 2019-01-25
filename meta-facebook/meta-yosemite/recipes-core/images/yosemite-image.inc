@@ -125,3 +125,58 @@ IMAGE_INSTALL += " rikor-fru"
 #  usbhost \
 #  "
 
+#<<<<<<< HEAD
+#=======
+## Include modules in rootfs
+#IMAGE_INSTALL += " \
+#  packagegroup-openbmc-base \
+#  healthd \
+#  fbutils \
+#  fan-util \
+#  fscd \
+#  sensor-setup \
+#  ipmid \
+#  packagegroup-openbmc-net \
+#  packagegroup-openbmc-python3 \
+#  packagegroup-openbmc-rest3 \
+#  fruid \
+#  ipmbd \
+#  bic-cached \
+#  bic-util \
+#  yosemite-sensors \
+#  sensor-util \
+#  sensor-mon \
+#  gpiod \
+#  gpiointrd \
+#  front-paneld \
+#  power-util \
+#  mterm\
+#  cfg-util \
+#  fw-util \
+#  fpc-util \
+#  me-util \
+#  log-util \
+#  lldp-util \
+#  spatula \
+#  openbmc-utils \
+#  conf-util \
+#  libncsi \
+#  ncsi-util \
+#  ncsid \
+#  libpldm \
+#  "
+#
+#IMAGE_FEATURES += " \
+#  ssh-server-openssh \
+#  tools-debug \
+#  "
+#
+#DISTRO_FEATURES += " \
+#  ext2 \
+#  ipv6 \
+#  nfs \
+#  usbgadget \
+#  usbhost \
+#  "
+#>>>>>>> master
+

@@ -30,102 +30,146 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <openbmc/kv.h>
 #include <openbmc/ipmi.h>
 #include <openbmc/ipmb.h>
 #include <openbmc/pal.h>
 #include <openbmc/obmc-i2c.h>
+#include <openbmc/sdr.h>
+
+#define TMP75_NAME    "tmp75"
+#define ADM1278_NAME  "adm1278"
 
 #define BTN_MAX_SAMPLES   200
 #define BTN_POWER_OFF     40
 
 #define ADM1278_ADDR 0x10
-#define LM75_1_ADDR 0x48
-#define LM75_2_ADDR 0x4b
-#define MAX34461_ADDR 0x74
-#define FPGA_16Q_ADDR 0x60
-#define FPGA_4DD_ADDR 0x61
+#define TMP75_1_ADDR 0x48
+#define TMP75_2_ADDR 0x4b
 
 #define INTERVAL_MAX  5
 
-static int
-i2c_open(uint8_t bus, uint8_t addr) {
-  int fd = -1;
-  int rc = -1;
-  char fn[32];
-
-  snprintf(fn, sizeof(fn), "/dev/i2c-%d", bus);
-  fd = open(fn, O_RDWR);
-
-  if (fd == -1) {
-    syslog(LOG_WARNING,
-            "Failed to open i2c device %s, errno=%d", fn, errno);
-    return -1;
+static void
+pim_device_detect_log(uint8_t num, uint8_t bus, uint8_t addr,
+                      char* device, int state) {
+  switch (state) {
+    case I2C_BUS_ERROR:
+    case I2C_FUNC_ERROR:
+      syslog(LOG_CRIT, "PIM %d Bus:%d get fail", num, bus);
+      break;
+    case I2C_DEVICE_ERROR:
+      syslog(LOG_CRIT, "PIM %d Bus:%d Addr:0x%x Device:%s get fail",
+             num, bus, addr, device);
+      break;
+    case I2c_DRIVER_EXIST:
+      syslog(LOG_WARNING, "PIM %d Bus:%d Addr:0x%x Device:%s driver exist",
+             num, bus, addr, device);
+      break;
   }
-
-  rc = ioctl(fd, I2C_SLAVE_FORCE, addr);
-  if (rc < 0) {
-    syslog(LOG_WARNING,
-            "Failed to open slave @ address 0x%x, errno=%d", addr, errno);
-    close(fd);
-    return -1;
-  }
-
-  return fd;
 }
 
-static int
+static void
 pim_driver_add(uint8_t num) {
-  int ret = 0;
+  int state;
   uint8_t bus = ((num - 1) * 8) + 80;
 
-  sleep(5); /* Sleep to avoid mount max34461 fail. */
-  ret += pal_add_i2c_device((bus + 2), LM75_1_ADDR, "tmp75");
-  ret += pal_add_i2c_device((bus + 3), LM75_2_ADDR, "tmp75");
-  ret += pal_add_i2c_device((bus + 4), ADM1278_ADDR, "adm1278");
-  ret += pal_add_i2c_device((bus + 6), MAX34461_ADDR, "max34461");
-
-  return ret;
-}
-
-static int
-pim_driver_del(uint8_t num) {
-  int ret = 0;
-  uint8_t bus = ((num - 1) * 8) + 80;
-
-  ret += pal_del_i2c_device((bus + 2), LM75_1_ADDR);
-  ret += pal_del_i2c_device((bus + 3), LM75_2_ADDR);
-  ret += pal_del_i2c_device((bus + 4), ADM1278_ADDR);
-  ret += pal_del_i2c_device((bus + 6), MAX34461_ADDR);
-
-  return ret;
-}
-
-static int
-set_pim_slot_id(uint8_t num) {
-  int ret = -1, fd = -1, type;
-  uint8_t bus = ((num - 1) * 8) + 80;
-  uint8_t fru = num + 2;
-
-  type = pal_get_pim_type_from_file(fru);
-  if (type == PIM_TYPE_16Q) {
-    fd = i2c_open(bus, FPGA_16Q_ADDR);
-  } else if (type == PIM_TYPE_4DD) {
-    fd = i2c_open(bus, FPGA_4DD_ADDR);
-  } else if (type == PIM_TYPE_UNPLUG) {
-    return 0;
+  state = pal_detect_i2c_device(bus+2, TMP75_1_ADDR, MODE_AUTO, 0);
+  if (state) {
+    pim_device_detect_log(num, bus+2, TMP75_1_ADDR, TMP75_NAME, state);
   } else {
-    return -1;
+    if (pal_add_i2c_device(bus+2, TMP75_1_ADDR, TMP75_NAME)) {
+      syslog(LOG_CRIT, "PIM %d Bus:%d Addr:0x%x Device:%s "
+                       "driver cannot add.",
+                       num, bus+2, TMP75_1_ADDR, TMP75_NAME);
+    }
+  }
+  msleep(50);
+
+  state = pal_detect_i2c_device(bus+3, TMP75_2_ADDR, MODE_AUTO, 0);
+  if (state) {
+    pim_device_detect_log(num, bus+3, TMP75_2_ADDR, TMP75_NAME, state);
+  } else {
+    if (pal_add_i2c_device(bus+3, TMP75_2_ADDR, TMP75_NAME)) {
+      syslog(LOG_CRIT, "PIM %d Bus:%d Addr:0x%x Device:%s "
+                       "driver cannot add.",
+                       num, bus+3, TMP75_2_ADDR, TMP75_NAME);
+    }
+  }
+  msleep(50);
+
+  state = pal_detect_i2c_device(bus+4, ADM1278_ADDR, MODE_AUTO, 0);
+  if (state) {
+    pim_device_detect_log(num, bus+4, ADM1278_ADDR, ADM1278_NAME, state);
+  } else {
+    if (pal_add_i2c_device(bus+4, ADM1278_ADDR, ADM1278_NAME)) {
+      syslog(LOG_CRIT, "PIM %d Bus:%d Addr:0x%x Device:%s "
+                       "driver cannot add.",
+                       num, bus+4, ADM1278_ADDR, ADM1278_NAME);
+    }
+  }
+}
+
+static void
+pim_driver_del(uint8_t num) {
+  uint8_t bus = ((num - 1) * 8) + 80;
+
+  if (pal_del_i2c_device(bus+2, TMP75_1_ADDR)) {
+    syslog(LOG_CRIT, "PIM %d Bus:%d Addr:0x%x Device:%s "
+                      "driver cannot delete.",
+                      num, bus+2, TMP75_1_ADDR, TMP75_NAME);
   }
 
-  if (fd < 0) {
-    close(fd);
-    return -1;
+  if (pal_del_i2c_device(bus+3, TMP75_2_ADDR)) {
+    syslog(LOG_CRIT, "PIM %d Bus:%d Addr:0x%x Device:%s "
+                      "driver cannot delete.",
+                      num, bus+3, TMP75_2_ADDR, TMP75_NAME);
   }
-  ret = i2c_smbus_write_byte_data(fd, 0x03, num);
-  close(fd);
 
-  if (ret) {
+  if (pal_del_i2c_device(bus+4, ADM1278_ADDR)) {
+    syslog(LOG_CRIT, "PIM %d Bus:%d Addr:0x%x Device:%s "
+                      "driver cannot delete.",
+                      num, bus+4, ADM1278_ADDR, ADM1278_NAME);
+  }
+}
+
+static int
+pim_thresh_init_file_check(uint8_t fru) {
+  char fru_name[32];
+  char fpath[64];
+
+  pal_get_fru_name(fru, fru_name);
+  snprintf(fpath, 64, INIT_THRESHOLD_BIN, fru_name);
+
+  return access(INIT_THRESHOLD_BIN, F_OK);
+}
+
+int
+pim_thresh_init(uint8_t fru) {
+  int i, sensor_cnt;
+  uint8_t snr_num;
+  uint8_t *sensor_list;
+  thresh_sensor_t snr[MAX_NUM_FRUS][MAX_SENSOR_NUM] = {0};
+
+  pal_get_fru_sensor_list(fru, &sensor_list, &sensor_cnt);
+  for (i = 0; i < sensor_cnt; i++) {
+    snr_num = sensor_list[i];
+    if (sdr_get_snr_thresh(fru, snr_num, &snr[fru - 1][snr_num]) < 0) {
+#ifdef DEBUG
+      syslog(LOG_WARNING, "pim_thresh_init: sdr_get_snr_thresh for FRU: %d",
+             fru);
+#endif
+      continue;
+    }
+  }
+
+  if (access(THRESHOLD_PATH, F_OK) == -1) {
+    mkdir(THRESHOLD_PATH, 0777);
+  }
+
+  if (pal_copy_all_thresh_to_file(fru, snr[fru - 1]) < 0) {
+    syslog(LOG_WARNING, "%s: Fail to copy thresh to file for FRU: %d",
+           __func__, fru);
     return -1;
   }
 
@@ -134,7 +178,7 @@ set_pim_slot_id(uint8_t num) {
 
 // Thread for monitoring scm plug
 static void *
-scm_monitor_handler(void *unused){
+scm_monitor_handler(void *unused) {
   int curr = -1;
   int prev = -1;
   int ret;
@@ -180,7 +224,7 @@ scm_mon_out:
 
 // Thread for monitoring pim plug
 static void *
-pim_monitor_handler(void *unused){
+pim_monitor_handler(void *unused) {
   uint8_t fru;
   uint8_t num;
   uint8_t ret;
@@ -190,10 +234,11 @@ pim_monitor_handler(void *unused){
   uint8_t pim_type;
   uint8_t pim_type_old[10] = {PIM_TYPE_UNPLUG};
   uint8_t interval[10];
+  bool thresh_first = true;
 
   memset(interval, INTERVAL_MAX, sizeof(interval));
   while (1) {
-    for(fru = FRU_PIM1; fru <= FRU_PIM8; fru++){
+    for (fru = FRU_PIM1; fru <= FRU_PIM8; fru++) {
       ret = pal_is_fru_prsnt(fru, &prsnt);
       if (ret) {
         goto pim_mon_out;
@@ -206,12 +251,7 @@ pim_monitor_handler(void *unused){
       if (prsnt != prsnt_ori) {
         if (prsnt) {
           syslog(LOG_WARNING, "PIM %d is plugged in.", num);
-          ret = pim_driver_add(num);
-          if(ret){
-            syslog(LOG_WARNING, "MAX34461 of PIM %d is not ready "
-                                  "or sensor cannot be mounted.", num);
-          }
-
+          pim_driver_add(num);
           pim_type = pal_get_pim_type(fru);
           if (pim_type != pim_type_old[num]) {
             if (pim_type == PIM_TYPE_16Q) {
@@ -240,13 +280,21 @@ pim_monitor_handler(void *unused){
                       "pal_set_pim_type_to_file: PIM %d set none failed", num);
               }
             }
-            pal_set_pim_thresh(fru);
+            if (thresh_first == true) {
+              thresh_first = false;
+            } else {
+              if (pim_thresh_init_file_check(fru)) {
+                pim_thresh_init(fru);
+              } else {
+                pal_set_pim_thresh(fru);
+              }
+            }
           }
         } else {
           syslog(LOG_WARNING, "PIM %d is unplugged.", num);
           pim_type_old[num] = PIM_TYPE_UNPLUG;
           pal_clear_thresh_value(fru);
-          ret = pim_driver_del(num);
+          pim_driver_del(num);
           if (pal_set_pim_type_to_file(fru, "unplug")) {
             syslog(LOG_WARNING,
                     "pal_set_pim_type_to_file: PIM %d set unplug failed", num);
@@ -256,17 +304,11 @@ pim_monitor_handler(void *unused){
         curr_state = prsnt ? SETBIT(curr_state, (num - 1))
                            : CLEARBIT(curr_state, (num - 1));
       }
-      /* Set PIM number into DOM FPGA 0x03 register to control LED stream. */
       /* 1 is prsnt, 0 is not prsnt. */
       if (prsnt) {
         if (interval[num] == 0) {
           interval[num] = INTERVAL_MAX;
           pal_set_pim_sts_led(fru);
-          ret = set_pim_slot_id(num);
-          if (ret) {
-            syslog(LOG_WARNING,
-                    "Cannot set slot id into FPGA register of PIM %d" ,num);
-          }
         } else {
           interval[num]--;
         }
@@ -410,8 +452,8 @@ main (int argc, char * const argv[]) {
   signal(SIGTERM, exithandler);
   pid_file = open("/var/run/front-paneld.pid", O_CREAT | O_RDWR, 0666);
   rc = flock(pid_file, LOCK_EX | LOCK_NB);
-  if(rc) {
-    if(EWOULDBLOCK == errno) {
+  if (rc) {
+    if (EWOULDBLOCK == errno) {
       printf("Another front-paneld instance is running...\n");
       exit(-1);
     }

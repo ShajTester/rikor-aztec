@@ -57,6 +57,8 @@
       "OpenBMC Version",
       "Reset Reason",
       "Uptime"
+    ],
+    "/api/sys/modbus_registers":[
     ]
   }
 }

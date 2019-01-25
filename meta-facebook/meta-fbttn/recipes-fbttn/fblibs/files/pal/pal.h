@@ -46,12 +46,9 @@ extern "C" {
 
 #define SERVER_PWR_ON_LOCK "/var/run/server%d_power_on.lock"
 
-#define SETBIT(x, y)        (x | (1 << y))
-#define GETBIT(x, y)        ((x & (1 << y)) > y)
-#define CLEARBIT(x, y)      (x & (~(1 << y)))
-#define GETMASK(y)          (1 << y)
-
 #define MAX_NODES 4
+
+#define MAX_ERROR_CODES 256
 
 //Expander
 #define SCC_FIRST_SENSOR_NUM 96 //Expander_TEMP 0x60
@@ -293,7 +290,7 @@ void pal_sensor_assert_handle(uint8_t fru, uint8_t snr_num, float val, uint8_t t
 void pal_sensor_deassert_handle(uint8_t fru, uint8_t snr_num, float val, uint8_t thresh);
 void pal_post_end_chk(uint8_t *post_end_chk);
 int pal_get_fw_info(uint8_t fru, unsigned char target, unsigned char* res, unsigned char* res_len);
-int pal_get_error_code(uint8_t* data, uint8_t* error_count);
+int pal_get_error_code(uint8_t data[MAX_ERROR_CODES], uint8_t* error_count);
 int pal_post_get_buffer(uint8_t *buffer, uint8_t *buf_len);
 void pal_add_cri_sel(char *str);
 void pal_i2c_crash_assert_handle(int i2c_bus_num);

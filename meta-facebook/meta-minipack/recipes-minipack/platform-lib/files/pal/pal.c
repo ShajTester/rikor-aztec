@@ -77,6 +77,18 @@ const uint8_t bic_discrete_list[] = {
   BIC_SENSOR_CAT_ERR,
 };
 
+// List of BIC sensors which need to do negative reading handle
+const uint8_t bic_neg_reading_sensor_support_list[] = {
+  /* Temperature sensors*/
+  BIC_SENSOR_MB_OUTLET_TEMP,
+  BIC_SENSOR_MB_INLET_TEMP,
+  BIC_SENSOR_PCH_TEMP,
+  BIC_SENSOR_SOC_TEMP,
+  BIC_SENSOR_SOC_DIMMA0_TEMP,
+  BIC_SENSOR_SOC_DIMMB0_TEMP,
+  BIC_SENSOR_VCCIN_VR_CURR,
+};
+
 /* List of SCM sensors to be monitored */
 const uint8_t scm_sensor_list[] = {
   SCM_SENSOR_OUTLET_LOCAL_TEMP,
@@ -617,30 +629,60 @@ write_device(const char *device, const char *value) {
 }
 
 int
-pal_detect_i2c_device(uint8_t bus, uint8_t addr) {
+pal_detect_i2c_device(uint8_t bus, uint8_t addr, uint8_t mode, uint8_t force) {
 
   int fd = -1, rc = -1;
   char fn[32];
+  uint32_t funcs;
 
   snprintf(fn, sizeof(fn), "/dev/i2c-%d", bus);
   fd = open(fn, O_RDWR);
   if (fd == -1) {
     syslog(LOG_WARNING, "Failed to open i2c device %s", fn);
-    return -1;
+    return I2C_BUS_ERROR;
   }
 
-  rc = ioctl(fd, I2C_SLAVE_FORCE, addr);
-  if (rc < 0) {
-    syslog(LOG_WARNING, "Failed to open slave @ address 0x%x", addr);
+  if (ioctl(fd, I2C_FUNCS, &funcs) < 0) {
+    syslog(LOG_WARNING, "Failed to get %s functionality matrix", fn);
     close(fd);
-    return -1;
+    return I2C_FUNC_ERROR;
   }
 
-  rc = i2c_smbus_read_byte(fd);
+  if (force) {
+    if (ioctl(fd, I2C_SLAVE_FORCE, addr)) {
+      syslog(LOG_WARNING, "Failed to open slave @ address 0x%x", addr);
+      close(fd);
+      return I2C_DEVICE_ERROR;
+    }
+   } else {
+    if (ioctl(fd, I2C_SLAVE, addr) < 0) {
+      syslog(LOG_WARNING, "Failed to open slave @ address 0x%x", addr);
+      close(fd);
+      return I2c_DRIVER_EXIST;
+    }
+  }
+
+  /* Probe this address */
+  switch (mode) {
+    case MODE_QUICK:
+      /* This is known to corrupt the Atmel AT24RF08 EEPROM */
+      rc = i2c_smbus_write_quick(fd, I2C_SMBUS_WRITE);
+      break;
+    case MODE_READ:
+      /* This is known to lock SMBus on various
+         write-only chips (mainly clock chips) */
+      rc = i2c_smbus_read_byte(fd);
+      break;
+    default:
+      if ((addr >= 0x30 && addr <= 0x37) || (addr >= 0x50 && addr <= 0x5F))
+        rc = i2c_smbus_read_byte(fd);
+      else
+        rc = i2c_smbus_write_quick(fd, I2C_SMBUS_WRITE);
+  }
   close(fd);
 
   if (rc < 0) {
-    return -1;
+    return I2C_DEVICE_ERROR;
   } else {
     return 0;
   }
@@ -685,84 +727,32 @@ pal_del_i2c_device(uint8_t bus, uint8_t addr) {
 
 int
 pal_get_pim_type(uint8_t fru) {
-  int ret = -1;
+  int retry = 10, ret = -1, val;
+  char path[LARGEST_DEVICE_NAME + 1];
+  uint8_t bus = ((fru - FRU_PIM1) * 8) + 80;
 
-  switch(fru) {
-    case FRU_PIM1:
-      if (!pal_detect_i2c_device(80, 0x60)) {
-        ret = PIM_TYPE_16Q;
-      } else if (!pal_detect_i2c_device(80, 0x61)) {
-        ret = PIM_TYPE_4DD;
-      } else {
-        ret = -1;
-      }
-      break;
-    case FRU_PIM2:
-      if (!pal_detect_i2c_device(88, 0x60)) {
-        ret = PIM_TYPE_16Q;
-      } else if (!pal_detect_i2c_device(88, 0x61)) {
-        ret = PIM_TYPE_4DD;
-      } else {
-        ret = -1;
-      }
-      break;
-    case FRU_PIM3:
-      if (!pal_detect_i2c_device(96, 0x60)) {
-        ret = PIM_TYPE_16Q;
-      } else if (!pal_detect_i2c_device(96, 0x61)) {
-        ret = PIM_TYPE_4DD;
-      } else {
-        ret = -1;
-      }
-      break;
-    case FRU_PIM4:
-      if (!pal_detect_i2c_device(104, 0x60)) {
-        ret = PIM_TYPE_16Q;
-      } else if (!pal_detect_i2c_device(104, 0x61)) {
-        ret = PIM_TYPE_4DD;
-      } else {
-        ret = -1;
-      }
-      break;
-    case FRU_PIM5:
-      if (!pal_detect_i2c_device(112, 0x60)) {
-        ret = PIM_TYPE_16Q;
-      } else if (!pal_detect_i2c_device(112, 0x61)) {
-        ret = PIM_TYPE_4DD;
-      } else {
-        ret = -1;
-      }
-      break;
-    case FRU_PIM6:
-      if (!pal_detect_i2c_device(120, 0x60)) {
-        ret = PIM_TYPE_16Q;
-      } else if (!pal_detect_i2c_device(120, 0x61)) {
-        ret = PIM_TYPE_4DD;
-      } else {
-        ret = -1;
-      }
-      break;
-    case FRU_PIM7:
-      if (!pal_detect_i2c_device(128, 0x60)) {
-        ret = PIM_TYPE_16Q;
-      } else if (!pal_detect_i2c_device(128, 0x61)) {
-        ret = PIM_TYPE_4DD;
-      } else {
-        ret = -1;
-      }
-      break;
-    case FRU_PIM8:
-      if (!pal_detect_i2c_device(136, 0x60)) {
-        ret = PIM_TYPE_16Q;
-      } else if (!pal_detect_i2c_device(136, 0x61)) {
-        ret = PIM_TYPE_4DD;
-      } else {
-        ret = -1;
-      }
-      break;
-    default:
-      return -1;
+  snprintf(path, LARGEST_DEVICE_NAME,
+           "/sys/class/i2c-adapter/i2c-%d/%d-0060/board_ver", bus, bus);
+
+  while ((ret = read_device(path, &val)) != 0 && retry--) {
+    msleep(500);
   }
+  if (ret) {
+    return -1;
+  }
+
+#if DEBUG
+  syslog(LOG_WARNING, "[%s] val: 0x%x", __func__, val);
+#endif
+
+  if (val == 0x0) {
+    ret = PIM_TYPE_16Q;
+  } else if (val == 0x10) {
+    ret = PIM_TYPE_4DD;
+  } else {
+    return -1;
+  }
+
   return ret;
 }
 
@@ -821,17 +811,17 @@ pim_thresh_array_init(uint8_t fru) {
     case FRU_PIM8:
       i = fru - 3;
       pim_sensor_threshold[PIM1_SENSOR_TEMP1+(i*0x15)][UCR_THRESH] = 70;
-      pim_sensor_threshold[PIM1_SENSOR_TEMP2+(i*0x15)][UCR_THRESH] = 70;
-      pim_sensor_threshold[PIM1_SENSOR_QSFP_TEMP+i][UCR_THRESH] = 70;
-      pim_sensor_threshold[PIM1_SENSOR_HSC_VOLT+(i*0x15)][UCR_THRESH] = 12.960;
-      pim_sensor_threshold[PIM1_SENSOR_HSC_VOLT+(i*0x15)][LCR_THRESH] = 11.040;
-      pim_sensor_threshold[PIM1_SENSOR_HSC_CURR+(i*0x15)][UCR_THRESH] = 25.59;
-      pim_sensor_threshold[PIM1_SENSOR_HSC_POWER+(i*0x15)][UCR_THRESH] = 200;
+      pim_sensor_threshold[PIM1_SENSOR_TEMP2+(i*0x15)][UCR_THRESH] = 80;
+      pim_sensor_threshold[PIM1_SENSOR_QSFP_TEMP+i][UCR_THRESH] = 52;
+      pim_sensor_threshold[PIM1_SENSOR_HSC_VOLT+(i*0x15)][UCR_THRESH] = 12.6;
+      pim_sensor_threshold[PIM1_SENSOR_HSC_VOLT+(i*0x15)][LCR_THRESH] = 11.4;
+      pim_sensor_threshold[PIM1_SENSOR_HSC_CURR+(i*0x15)][UCR_THRESH] = 12;
+      pim_sensor_threshold[PIM1_SENSOR_HSC_POWER+(i*0x15)][UCR_THRESH] = 144;
 
       type = pal_get_pim_type_from_file(fru);
       if (type == PIM_TYPE_16Q) {
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT1+(i*0x15)][UCR_THRESH] = 0.864;
-        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT1+(i*0x15)][LCR_THRESH] = 0.662;
+        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT1+(i*0x15)][LCR_THRESH] = 0.58;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT2+(i*0x15)][UCR_THRESH] = 0.864;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT2+(i*0x15)][LCR_THRESH] = 0.662;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT3+(i*0x15)][UCR_THRESH] = 0.864;
@@ -839,7 +829,7 @@ pim_thresh_array_init(uint8_t fru) {
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT4+(i*0x15)][UCR_THRESH] = 1.944;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT4+(i*0x15)][LCR_THRESH] = 1.656;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT5+(i*0x15)][UCR_THRESH] = 0.864;
-        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT5+(i*0x15)][LCR_THRESH] = 0.662;
+        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT5+(i*0x15)][LCR_THRESH] = 0.58;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT6+(i*0x15)][UCR_THRESH] = 0.864;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT6+(i*0x15)][LCR_THRESH] = 0.662;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT7+(i*0x15)][UCR_THRESH] = 0.864;
@@ -847,7 +837,7 @@ pim_thresh_array_init(uint8_t fru) {
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT8+(i*0x15)][UCR_THRESH] = 1.944;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT8+(i*0x15)][LCR_THRESH] = 1.656;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT9+(i*0x15)][UCR_THRESH] = 0.864;
-        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT9+(i*0x15)][LCR_THRESH] = 0.662;
+        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT9+(i*0x15)][LCR_THRESH] = 0.58;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT10+(i*0x15)][UCR_THRESH] = 0.864;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT10+(i*0x15)][LCR_THRESH] = 0.662;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT11+(i*0x15)][UCR_THRESH] = 0.864;
@@ -855,7 +845,7 @@ pim_thresh_array_init(uint8_t fru) {
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT12+(i*0x15)][UCR_THRESH] = 1.944;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT12+(i*0x15)][LCR_THRESH] = 1.656;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT13+(i*0x15)][UCR_THRESH] = 0.864;
-        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT13+(i*0x15)][LCR_THRESH] = 0.662;
+        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT13+(i*0x15)][LCR_THRESH] = 0.58;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT14+(i*0x15)][UCR_THRESH] = 0.864;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT14+(i*0x15)][LCR_THRESH] = 0.662;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT15+(i*0x15)][UCR_THRESH] = 0.864;
@@ -864,37 +854,37 @@ pim_thresh_array_init(uint8_t fru) {
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT16+(i*0x15)][LCR_THRESH] = 1.656;
       } else if (type == PIM_TYPE_4DD) {
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT1+(i*0x15)][UCR_THRESH] = 0.864;
-        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT1+(i*0x15)][LCR_THRESH] = 0.662;
+        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT1+(i*0x15)][LCR_THRESH] = 0.58;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT2+(i*0x15)][UCR_THRESH] = 0.864;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT2+(i*0x15)][LCR_THRESH] = 0.662;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT3+(i*0x15)][UCR_THRESH] = 1.944;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT3+(i*0x15)][LCR_THRESH] = 1.656;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT4+(i*0x15)][UCR_THRESH] = 100;
-        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT4+(i*0x15)][LCR_THRESH] = 0;
+        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT4+(i*0x15)][LCR_THRESH] = -100;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT5+(i*0x15)][UCR_THRESH] = 0.864;
-        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT5+(i*0x15)][LCR_THRESH] = 0.662;
+        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT5+(i*0x15)][LCR_THRESH] = 0.58;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT6+(i*0x15)][UCR_THRESH] = 0.864;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT6+(i*0x15)][LCR_THRESH] = 0.662;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT7+(i*0x15)][UCR_THRESH] = 1.944;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT7+(i*0x15)][LCR_THRESH] = 1.656;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT8+(i*0x15)][UCR_THRESH] = 100;
-        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT8+(i*0x15)][LCR_THRESH] = 0;
+        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT8+(i*0x15)][LCR_THRESH] = -100;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT9+(i*0x15)][UCR_THRESH] = 0.864;
-        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT9+(i*0x15)][LCR_THRESH] = 0.662;
+        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT9+(i*0x15)][LCR_THRESH] = 0.58;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT10+(i*0x15)][UCR_THRESH] = 0.864;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT10+(i*0x15)][LCR_THRESH] = 0.662;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT11+(i*0x15)][UCR_THRESH] = 1.944;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT11+(i*0x15)][LCR_THRESH] = 1.656;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT12+(i*0x15)][UCR_THRESH] = 100;
-        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT12+(i*0x15)][LCR_THRESH] = 0;
+        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT12+(i*0x15)][LCR_THRESH] = -100;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT13+(i*0x15)][UCR_THRESH] = 0.864;
-        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT13+(i*0x15)][LCR_THRESH] = 0.662;
+        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT13+(i*0x15)][LCR_THRESH] = 0.58;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT14+(i*0x15)][UCR_THRESH] = 0.864;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT14+(i*0x15)][LCR_THRESH] = 0.662;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT15+(i*0x15)][UCR_THRESH] = 1.944;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT15+(i*0x15)][LCR_THRESH] = 1.656;
         pim_sensor_threshold[PIM1_SENSOR_34461_VOLT16+(i*0x15)][UCR_THRESH] = 100;
-        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT16+(i*0x15)][LCR_THRESH] = 0;
+        pim_sensor_threshold[PIM1_SENSOR_34461_VOLT16+(i*0x15)][LCR_THRESH] = -100;
       }
       break;
   }
@@ -2398,13 +2388,21 @@ bic_get_sdr_thresh_val(uint8_t fru, uint8_t snr_num,
   uint16_t m = 0, b = 0;
   sensor_info_t sinfo[MAX_SENSOR_NUM] = {0};
   sdr_full_t *sdr;
+  char cvalue[MAX_VALUE_LEN] = {0};
 
-  while ((ret = bic_sensor_sdr_init(fru, sinfo)) == ERR_NOT_READY &&
-    retry++ < MAX_RETRIES_SDR_INIT) {
-    sleep(1);
+
+  ret = kv_get(SCM_INIT_THRESH_STATUS, cvalue, NULL, 0);
+  if (!strncmp(cvalue, "done", sizeof("done"))) {
+    ret = bic_sensor_sdr_init(fru, sinfo);
+  } else {
+    while ((ret = bic_sensor_sdr_init(fru, sinfo)) == ERR_NOT_READY &&
+      retry++ < MAX_SDR_THRESH_RETRY) {
+      sleep(1);
+    }
   }
+
   if (ret < 0) {
-    syslog(LOG_WARNING, "bic_get_sdr_thresh_val: failed for fru: %d", fru);
+    syslog(LOG_CRIT, "BIC threshold value can't get");
     return -1;
   }
   sdr = &sinfo[snr_num].sdr;
@@ -2473,7 +2471,7 @@ static int
 bic_read_sensor_wrapper(uint8_t fru, uint8_t sensor_num, bool discrete,
     void *value) {
 
-  int ret;
+  int ret, i;
   ipmi_sensor_reading_t sensor;
   sdr_full_t *sdr;
 
@@ -2538,6 +2536,14 @@ bic_read_sensor_wrapper(uint8_t fru, uint8_t sensor_num, bool discrete,
 
   if ((sensor_num == BIC_SENSOR_SOC_THERM_MARGIN) && (* (float *) value > 0)) {
    * (float *) value -= (float) THERMAL_CONSTANT;
+  }
+
+  if (*(float *) value > MAX_POS_READING_MARGIN) {     //Negative reading handle
+    for(i=0;i<sizeof(bic_neg_reading_sensor_support_list)/sizeof(uint8_t);i++) {
+      if (sensor_num == bic_neg_reading_sensor_support_list[i]) {
+        * (float *) value -= (float) THERMAL_CONSTANT;
+      }
+    }
   }
 
   return 0;
@@ -2929,7 +2935,7 @@ pim_sensor_read(uint8_t sensor_num, float *value) {
       ret = read_attr(PIM1_TEMP2_DEVICE, TEMP(1), value);
       break;
     case PIM1_SENSOR_QSFP_TEMP:
-      ret = read_attr(SMB_IOB_DEVICE, TEMP(1), value);
+      ret = read_attr(PIM1_DOM_DEVICE, TEMP(1), value);
       break;
     case PIM1_SENSOR_HSC_VOLT:
       ret = read_hsc_volt(PIM1_HSC_DEVICE, 1, value);
@@ -2995,7 +3001,7 @@ pim_sensor_read(uint8_t sensor_num, float *value) {
       ret = read_attr(PIM2_TEMP2_DEVICE, TEMP(1), value);
       break;
     case PIM2_SENSOR_QSFP_TEMP:
-      ret = read_attr(SMB_IOB_DEVICE, TEMP(2), value);
+      ret = read_attr(PIM2_DOM_DEVICE, TEMP(1), value);
       break;
     case PIM2_SENSOR_HSC_VOLT:
       ret = read_hsc_volt(PIM2_HSC_DEVICE, 1, value);
@@ -3061,7 +3067,7 @@ pim_sensor_read(uint8_t sensor_num, float *value) {
       ret = read_attr(PIM3_TEMP2_DEVICE, TEMP(1), value);
       break;
     case PIM3_SENSOR_QSFP_TEMP:
-      ret = read_attr(SMB_IOB_DEVICE, TEMP(3), value);
+      ret = read_attr(PIM3_DOM_DEVICE, TEMP(1), value);
       break;
     case PIM3_SENSOR_HSC_VOLT:
       ret = read_hsc_volt(PIM3_HSC_DEVICE, 1, value);
@@ -3127,7 +3133,7 @@ pim_sensor_read(uint8_t sensor_num, float *value) {
       ret = read_attr(PIM4_TEMP2_DEVICE, TEMP(1), value);
       break;
     case PIM4_SENSOR_QSFP_TEMP:
-      ret = read_attr(SMB_IOB_DEVICE, TEMP(4), value);
+      ret = read_attr(PIM4_DOM_DEVICE, TEMP(1), value);
       break;
     case PIM4_SENSOR_HSC_VOLT:
       ret = read_hsc_volt(PIM4_HSC_DEVICE, 1, value);
@@ -3193,7 +3199,7 @@ pim_sensor_read(uint8_t sensor_num, float *value) {
       ret = read_attr(PIM5_TEMP2_DEVICE, TEMP(1), value);
       break;
     case PIM5_SENSOR_QSFP_TEMP:
-      ret = read_attr(SMB_IOB_DEVICE, TEMP(5), value);
+      ret = read_attr(PIM5_DOM_DEVICE, TEMP(1), value);
       break;
     case PIM5_SENSOR_HSC_VOLT:
       ret = read_hsc_volt(PIM5_HSC_DEVICE, 1, value);
@@ -3259,7 +3265,7 @@ pim_sensor_read(uint8_t sensor_num, float *value) {
       ret = read_attr(PIM6_TEMP2_DEVICE, TEMP(1), value);
       break;
     case PIM6_SENSOR_QSFP_TEMP:
-      ret = read_attr(SMB_IOB_DEVICE, TEMP(6), value);
+      ret = read_attr(PIM6_DOM_DEVICE, TEMP(1), value);
       break;
     case PIM6_SENSOR_HSC_VOLT:
       ret = read_hsc_volt(PIM6_HSC_DEVICE, 1, value);
@@ -3325,7 +3331,7 @@ pim_sensor_read(uint8_t sensor_num, float *value) {
       ret = read_attr(PIM7_TEMP2_DEVICE, TEMP(1), value);
       break;
     case PIM7_SENSOR_QSFP_TEMP:
-      ret = read_attr(SMB_IOB_DEVICE, TEMP(7), value);
+      ret = read_attr(PIM7_DOM_DEVICE, TEMP(1), value);
       break;
     case PIM7_SENSOR_HSC_VOLT:
       ret = read_hsc_volt(PIM7_HSC_DEVICE, 1, value);
@@ -3391,7 +3397,7 @@ pim_sensor_read(uint8_t sensor_num, float *value) {
       ret = read_attr(PIM8_TEMP2_DEVICE, TEMP(1), value);
       break;
     case PIM8_SENSOR_QSFP_TEMP:
-      ret = read_attr(SMB_IOB_DEVICE, TEMP(8), value);
+      ret = read_attr(PIM8_DOM_DEVICE, TEMP(1), value);
       break;
     case PIM8_SENSOR_HSC_VOLT:
       ret = read_hsc_volt(PIM8_HSC_DEVICE, 1, value);
@@ -3458,9 +3464,84 @@ pim_sensor_read(uint8_t sensor_num, float *value) {
 }
 
 static int
-psu_sensor_read(uint8_t sensor_num, float *value) {
+psu_init_acok_key(uint8_t fru) {
+  uint8_t psu_num = fru - 10;
+  char key[MAX_KEY_LEN + 1];
 
+  snprintf(key, MAX_KEY_LEN, "psu%d_acok_state", psu_num);
+  kv_set(key, "1", 0, KV_FCREATE);
+
+  return 0;
+}
+
+static int
+psu_acok_log(uint8_t fru, uint8_t curr_state) {
+  uint8_t psu_num = fru - 10;
+  int ret, old_state;
+  char key[MAX_KEY_LEN + 1];
+  char cvalue[MAX_VALUE_LEN] = {0};
+
+  snprintf(key, MAX_KEY_LEN, "psu%d_acok_state", psu_num);
+  ret = kv_get(key, cvalue, NULL, 0);
+  if (ret < 0) {
+    return ret;
+  }
+
+  old_state = atoi(cvalue);
+
+  if (curr_state != old_state) {
+    if (curr_state == PSU_ACOK_UP) {
+      pal_update_ts_sled();
+      syslog(LOG_CRIT, "DEASSERT: PSU%d AC OK state - AC power up - FRU: %d",
+             psu_num, fru);
+      kv_set(key, "1", 0, 0);
+    } else {
+      pal_update_ts_sled();
+      syslog(LOG_CRIT, "ASSERT: PSU%d AC OK state - AC power down - FRU: %d",
+             psu_num, fru);
+      kv_set(key, "0", 0, 0);
+    }
+  }
+
+  return 0;
+}
+
+static int
+psu_acok_check(uint8_t fru) {
+  int val;
+  char path[LARGEST_DEVICE_NAME + 1];
+
+  if (fru == FRU_PSU1) {
+    snprintf(path, LARGEST_DEVICE_NAME, SMB_SYSFS, "psu_L2_input_ok");
+  } else if (fru == FRU_PSU2) {
+    snprintf(path, LARGEST_DEVICE_NAME, SMB_SYSFS, "psu_L1_input_ok");
+  } else if (fru == FRU_PSU3) {
+    snprintf(path, LARGEST_DEVICE_NAME, SMB_SYSFS, "psu_R2_input_ok");
+  } else if (fru == FRU_PSU4) {
+    snprintf(path, LARGEST_DEVICE_NAME, SMB_SYSFS, "psu_R1_input_ok");
+  }
+
+  if (read_device(path, &val)) {
+    syslog(LOG_ERR, "%s cannot get value from %s", __func__, path);
+    return 0;
+  }
+  if (!val) {
+    return READING_NA;
+  }
+
+  return val;
+}
+
+static int
+psu_sensor_read(uint8_t fru, uint8_t sensor_num, float *value) {
   int ret = -1;
+
+  ret = psu_acok_check(fru);
+  if (ret == READING_NA) {
+    psu_acok_log(fru, PSU_ACOK_DOWN);
+    goto psu_out;
+  }
+  psu_acok_log(fru, PSU_ACOK_UP);
 
   switch(sensor_num) {
     case PSU1_SENSOR_IN_VOLT:
@@ -3623,6 +3704,8 @@ psu_sensor_read(uint8_t sensor_num, float *value) {
       ret = READING_NA;
       break;
   }
+
+psu_out:
   return ret;
 }
 
@@ -3631,7 +3714,7 @@ pal_sensor_read_raw(uint8_t fru, uint8_t sensor_num, void *value) {
 
   char key[MAX_KEY_LEN];
   char fru_name[32];
-  int ret;
+  int ret , delay = 500;
   uint8_t prsnt = 0;
 
   pal_get_fru_name(fru, fru_name);
@@ -3651,9 +3734,16 @@ pal_sensor_read_raw(uint8_t fru, uint8_t sensor_num, void *value) {
   switch(fru) {
     case FRU_SCM:
       ret = scm_sensor_read(sensor_num, value);
+      if (sensor_num == SCM_SENSOR_INLET_REMOTE_TEMP) {
+        delay = 100;
+      }
       break;
     case FRU_SMB:
       ret = smb_sensor_read(sensor_num, value);
+      if (sensor_num == SMB_SENSOR_TH3_DIE_TEMP1 ||
+          sensor_num == SMB_SENSOR_TH3_DIE_TEMP2) {
+        delay = 100;
+      }
       break;
     case FRU_PIM1:
     case FRU_PIM2:
@@ -3664,12 +3754,16 @@ pal_sensor_read_raw(uint8_t fru, uint8_t sensor_num, void *value) {
     case FRU_PIM7:
     case FRU_PIM8:
       ret = pim_sensor_read(sensor_num, value);
+      if (sensor_num >= PIM1_SENSOR_QSFP_TEMP &&
+          sensor_num <= PIM8_SENSOR_QSFP_TEMP) {
+        delay = 100;
+      }
       break;
     case FRU_PSU1:
     case FRU_PSU2:
     case FRU_PSU3:
     case FRU_PSU4:
-      ret = psu_sensor_read(sensor_num, value);
+      ret = psu_sensor_read(fru, sensor_num, value);
       break;
     default:
       return -1;
@@ -3678,6 +3772,7 @@ pal_sensor_read_raw(uint8_t fru, uint8_t sensor_num, void *value) {
   if (ret == READING_NA || ret == -1) {
     return READING_NA;
   }
+  msleep(delay);
 
   return 0;
 }
@@ -5185,21 +5280,27 @@ sensor_thresh_array_init(uint8_t fru) {
 
   switch (fru) {
     case FRU_SCM:
-      scm_sensor_threshold[SCM_SENSOR_OUTLET_LOCAL_TEMP][UCR_THRESH] = 70;
-      scm_sensor_threshold[SCM_SENSOR_OUTLET_REMOTE_TEMP][UCR_THRESH] = 70;
-      scm_sensor_threshold[SCM_SENSOR_INLET_LOCAL_TEMP][UCR_THRESH] = 40;
-      scm_sensor_threshold[SCM_SENSOR_INLET_REMOTE_TEMP][UCR_THRESH] = 40;
-      scm_sensor_threshold[SCM_SENSOR_HSC_VOLT][UCR_THRESH] = 12.960;
-      scm_sensor_threshold[SCM_SENSOR_HSC_VOLT][LCR_THRESH] = 11.040;
-      scm_sensor_threshold[SCM_SENSOR_HSC_CURR][UCR_THRESH] = 10;
-      scm_sensor_threshold[SCM_SENSOR_HSC_POWER][UCR_THRESH] = 100;
+      scm_sensor_threshold[SCM_SENSOR_OUTLET_LOCAL_TEMP][UCR_THRESH] = 53;
+      scm_sensor_threshold[SCM_SENSOR_OUTLET_REMOTE_TEMP][UCR_THRESH] = 53;
+      scm_sensor_threshold[SCM_SENSOR_INLET_LOCAL_TEMP][UCR_THRESH] = 50;
+      scm_sensor_threshold[SCM_SENSOR_INLET_REMOTE_TEMP][UCR_THRESH] = 50;
+      scm_sensor_threshold[SCM_SENSOR_HSC_VOLT][UCR_THRESH] = 12.6;
+      scm_sensor_threshold[SCM_SENSOR_HSC_VOLT][LCR_THRESH] = 11.4;
+      scm_sensor_threshold[SCM_SENSOR_HSC_CURR][UCR_THRESH] = 5.8;
+      scm_sensor_threshold[SCM_SENSOR_HSC_POWER][UCR_THRESH] = 70;
       for (i = scm_sensor_cnt; i < scm_all_sensor_cnt; i++) {
-        for (j = 1; j <= MAX_SENSOR_THRESHOLD + 1; j++) {
+        for (j = 1; j <= MAX_SENSOR_THRESHOLD; j++) {
           if (!bic_get_sdr_thresh_val(fru, scm_all_sensor_list[i], j, &fvalue)){
             scm_sensor_threshold[scm_all_sensor_list[i]][j] = fvalue;
+          } else {
+            /* Error case, if get BIC data retry more than 30 times(30s),
+             * it means BIC get wrong, skip init BIC threshold value */
+            goto scm_thresh_done;
           }
         }
       }
+scm_thresh_done:
+      kv_set(SCM_INIT_THRESH_STATUS, "done", 0, 0);
       break;
     case FRU_SMB:
       smb_sensor_threshold[SMB_SENSOR_1220_VMON1][UCR_THRESH] = 4.32;
@@ -5220,7 +5321,7 @@ sensor_thresh_array_init(uint8_t fru) {
       smb_sensor_threshold[SMB_SENSOR_1220_VMON8][LCR_THRESH] = 3.036;
       smb_sensor_threshold[SMB_SENSOR_1220_VMON9][UCR_THRESH] = 0.927;
       smb_sensor_threshold[SMB_SENSOR_1220_VMON9][LCR_THRESH] = 0.727;
-      smb_sensor_threshold[SMB_SENSOR_1220_VMON10][UCR_THRESH] = 0.864;
+      smb_sensor_threshold[SMB_SENSOR_1220_VMON10][UCR_THRESH] = 0.927;
       smb_sensor_threshold[SMB_SENSOR_1220_VMON10][LCR_THRESH] = 0.736;
       smb_sensor_threshold[SMB_SENSOR_1220_VMON11][UCR_THRESH] = 1.944;
       smb_sensor_threshold[SMB_SENSOR_1220_VMON11][LCR_THRESH] = 1.656;
@@ -5230,14 +5331,14 @@ sensor_thresh_array_init(uint8_t fru) {
       smb_sensor_threshold[SMB_SENSOR_1220_VCCA][LCR_THRESH] = 3.036;
       smb_sensor_threshold[SMB_SENSOR_1220_VCCINP][UCR_THRESH] = 3.564;
       smb_sensor_threshold[SMB_SENSOR_1220_VCCINP][LCR_THRESH] = 3.036;
-      smb_sensor_threshold[SMB_SENSOR_TH3_SERDES_VOLT][UCR_THRESH] = 0.864;
+      smb_sensor_threshold[SMB_SENSOR_TH3_SERDES_VOLT][UCR_THRESH] = 0.927;
       smb_sensor_threshold[SMB_SENSOR_TH3_SERDES_VOLT][LCR_THRESH] = 0.736;
-      smb_sensor_threshold[SMB_SENSOR_TH3_SERDES_CURR][UCR_THRESH] = 300;
-      smb_sensor_threshold[SMB_SENSOR_TH3_SERDES_TEMP][UCR_THRESH] = 70;
+      smb_sensor_threshold[SMB_SENSOR_TH3_SERDES_CURR][UCR_THRESH] = 80;
+      smb_sensor_threshold[SMB_SENSOR_TH3_SERDES_TEMP][UCR_THRESH] = 90;
       smb_sensor_threshold[SMB_SENSOR_TH3_CORE_VOLT][UCR_THRESH] = 0.927;
       smb_sensor_threshold[SMB_SENSOR_TH3_CORE_VOLT][LCR_THRESH] = 0.727;
       smb_sensor_threshold[SMB_SENSOR_TH3_CORE_CURR][UCR_THRESH] = 300;
-      smb_sensor_threshold[SMB_SENSOR_TH3_CORE_TEMP][UCR_THRESH] = 70;
+      smb_sensor_threshold[SMB_SENSOR_TH3_CORE_TEMP][UCR_THRESH] = 90;
       smb_sensor_threshold[SMB_SENSOR_TEMP1][UCR_THRESH] = 70;
       smb_sensor_threshold[SMB_SENSOR_TEMP2][UCR_THRESH] = 70;
       smb_sensor_threshold[SMB_SENSOR_TEMP3][UCR_THRESH] = 70;
@@ -5253,86 +5354,68 @@ sensor_thresh_array_init(uint8_t fru) {
       smb_sensor_threshold[SMB_SENSOR_FCM_T_TEMP2][UCR_THRESH] = 70;
       smb_sensor_threshold[SMB_SENSOR_FCM_B_TEMP1][UCR_THRESH] = 70;
       smb_sensor_threshold[SMB_SENSOR_FCM_B_TEMP2][UCR_THRESH] = 70;
-      smb_sensor_threshold[SMB_SENSOR_FCM_T_HSC_VOLT][UCR_THRESH] = 12.960;
-      smb_sensor_threshold[SMB_SENSOR_FCM_T_HSC_VOLT][LCR_THRESH] = 11.040;
-      smb_sensor_threshold[SMB_SENSOR_FCM_T_HSC_CURR][UCR_THRESH] = 25.59;
-      smb_sensor_threshold[SMB_SENSOR_FCM_T_HSC_POWER][UCR_THRESH] = 300;
-      smb_sensor_threshold[SMB_SENSOR_FCM_B_HSC_VOLT][UCR_THRESH] = 12.960;
-      smb_sensor_threshold[SMB_SENSOR_FCM_B_HSC_VOLT][LCR_THRESH] = 11.040;
-      smb_sensor_threshold[SMB_SENSOR_FCM_B_HSC_CURR][UCR_THRESH] = 25.59;
-      smb_sensor_threshold[SMB_SENSOR_FCM_B_HSC_POWER][UCR_THRESH] = 300;
-      smb_sensor_threshold[SMB_SENSOR_FAN1_FRONT_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN1_FRONT_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN1_FRONT_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN1_REAR_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN1_REAR_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN1_REAR_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN2_FRONT_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN2_FRONT_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN2_FRONT_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN2_REAR_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN2_REAR_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN2_REAR_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN3_FRONT_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN3_FRONT_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN3_FRONT_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN3_REAR_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN3_REAR_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN3_REAR_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN4_FRONT_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN4_FRONT_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN4_FRONT_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN4_REAR_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN4_REAR_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN4_REAR_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN5_FRONT_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN5_FRONT_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN5_FRONT_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN5_REAR_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN5_REAR_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN5_REAR_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN6_FRONT_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN6_FRONT_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN6_FRONT_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN6_REAR_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN6_REAR_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN6_REAR_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN7_FRONT_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN7_FRONT_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN7_FRONT_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN7_REAR_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN7_REAR_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN7_REAR_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN8_FRONT_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN8_FRONT_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN8_FRONT_TACH][LCR_THRESH] = 500;
-      smb_sensor_threshold[SMB_SENSOR_FAN8_REAR_TACH][UCR_THRESH] = 11500;
-      smb_sensor_threshold[SMB_SENSOR_FAN8_REAR_TACH][UNC_THRESH] = 8500;
-      smb_sensor_threshold[SMB_SENSOR_FAN8_REAR_TACH][LCR_THRESH] = 500;
+      smb_sensor_threshold[SMB_SENSOR_FCM_T_HSC_VOLT][UCR_THRESH] = 12.6;
+      smb_sensor_threshold[SMB_SENSOR_FCM_T_HSC_VOLT][LCR_THRESH] = 11.4;
+      smb_sensor_threshold[SMB_SENSOR_FCM_T_HSC_CURR][UCR_THRESH] = 29;
+      smb_sensor_threshold[SMB_SENSOR_FCM_T_HSC_POWER][UCR_THRESH] = 350;
+      smb_sensor_threshold[SMB_SENSOR_FCM_B_HSC_VOLT][UCR_THRESH] = 12.6;
+      smb_sensor_threshold[SMB_SENSOR_FCM_B_HSC_VOLT][LCR_THRESH] = 11.4;
+      smb_sensor_threshold[SMB_SENSOR_FCM_B_HSC_CURR][UCR_THRESH] = 29;
+      smb_sensor_threshold[SMB_SENSOR_FCM_B_HSC_POWER][UCR_THRESH] = 350;
+      smb_sensor_threshold[SMB_SENSOR_FAN1_FRONT_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN1_FRONT_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN1_REAR_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN1_REAR_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN2_FRONT_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN2_FRONT_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN2_REAR_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN2_REAR_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN3_FRONT_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN3_FRONT_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN3_REAR_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN3_REAR_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN4_FRONT_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN4_FRONT_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN4_REAR_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN4_REAR_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN5_FRONT_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN5_FRONT_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN5_REAR_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN5_REAR_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN6_FRONT_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN6_FRONT_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN6_REAR_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN6_REAR_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN7_FRONT_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN7_FRONT_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN7_REAR_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN7_REAR_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN8_FRONT_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN8_FRONT_TACH][LCR_THRESH] = 800;
+      smb_sensor_threshold[SMB_SENSOR_FAN8_REAR_TACH][UCR_THRESH] = 12000;
+      smb_sensor_threshold[SMB_SENSOR_FAN8_REAR_TACH][LCR_THRESH] = 800;
       break;
     case FRU_PSU1:
     case FRU_PSU2:
     case FRU_PSU3:
     case FRU_PSU4:
       i = fru - 11;
-      psu_sensor_threshold[PSU1_SENSOR_IN_VOLT+(i*0x0d)][UCR_THRESH] = 259.2;
+      psu_sensor_threshold[PSU1_SENSOR_IN_VOLT+(i*0x0d)][UCR_THRESH] = 310;
       psu_sensor_threshold[PSU1_SENSOR_IN_VOLT+(i*0x0d)][LCR_THRESH] = 92;
-      psu_sensor_threshold[PSU1_SENSOR_12V_VOLT+(i*0x0d)][UCR_THRESH] = 12.960;
-      psu_sensor_threshold[PSU1_SENSOR_12V_VOLT+(i*0x0d)][LCR_THRESH] = 11.040;
-      psu_sensor_threshold[PSU1_SENSOR_STBY_VOLT+(i*0x0d)][UCR_THRESH] = 3.564;
-      psu_sensor_threshold[PSU1_SENSOR_STBY_VOLT+(i*0x0d)][LCR_THRESH] = 3.036;
+      psu_sensor_threshold[PSU1_SENSOR_12V_VOLT+(i*0x0d)][UCR_THRESH] = 13;
+      psu_sensor_threshold[PSU1_SENSOR_12V_VOLT+(i*0x0d)][LCR_THRESH] = 11;
+      psu_sensor_threshold[PSU1_SENSOR_STBY_VOLT+(i*0x0d)][UCR_THRESH] = 3.6;
+      psu_sensor_threshold[PSU1_SENSOR_STBY_VOLT+(i*0x0d)][LCR_THRESH] = 3.0;
       psu_sensor_threshold[PSU1_SENSOR_IN_CURR+(i*0x0d)][UCR_THRESH] = 10;
       psu_sensor_threshold[PSU1_SENSOR_12V_CURR+(i*0x0d)][UCR_THRESH] = 125;
       psu_sensor_threshold[PSU1_SENSOR_STBY_CURR+(i*0x0d)][UCR_THRESH] = 5;
       psu_sensor_threshold[PSU1_SENSOR_IN_POWER+(i*0x0d)][UCR_THRESH] = 1500;
       psu_sensor_threshold[PSU1_SENSOR_12V_POWER+(i*0x0d)][UCR_THRESH] = 1500;
       psu_sensor_threshold[PSU1_SENSOR_STBY_POWER+(i*0x0d)][UCR_THRESH] = 15;
-      psu_sensor_threshold[PSU1_SENSOR_FAN_TACH+(i*0x0d)][UCR_THRESH] = 11500;
-      psu_sensor_threshold[PSU1_SENSOR_FAN_TACH+(i*0x0d)][UNC_THRESH] = 8500;
       psu_sensor_threshold[PSU1_SENSOR_FAN_TACH+(i*0x0d)][LCR_THRESH] = 500;
-      psu_sensor_threshold[PSU1_SENSOR_TEMP1+(i*0x0d)][UCR_THRESH] = 70;
-      psu_sensor_threshold[PSU1_SENSOR_TEMP2+(i*0x0d)][UCR_THRESH] = 70;
-      psu_sensor_threshold[PSU1_SENSOR_TEMP3+(i*0x0d)][UCR_THRESH] = 70;
+      psu_sensor_threshold[PSU1_SENSOR_TEMP1+(i*0x0d)][UCR_THRESH] = 60;
+      psu_sensor_threshold[PSU1_SENSOR_TEMP2+(i*0x0d)][UCR_THRESH] = 80;
+      psu_sensor_threshold[PSU1_SENSOR_TEMP3+(i*0x0d)][UCR_THRESH] = 95;
       break;
   }
   init_done[fru] = true;
@@ -5422,39 +5505,17 @@ get_sensor_desc(uint8_t fru, uint8_t snr_num) {
 static int
 _set_pim_sts_led(uint8_t fru, uint8_t color)
 {
-  int dev, ret, type;
-  char device_name[20];
-  
-  snprintf(device_name, 20,"/dev/i2c-%d", 80+((fru-3)*8));
-  dev = open(device_name, O_RDWR);
-  if(dev < 0) {
-    syslog(LOG_ERR, "%s: open() failed\n", __func__);
-    return -1;
-  }
+  char path[LARGEST_DEVICE_NAME];
+  uint8_t bus = 80 + ((fru - 3) * 8);
 
-  type = pal_get_pim_type_from_file(fru);
+  snprintf(path, LARGEST_DEVICE_NAME,
+           "/sys/class/i2c-adapter/i2c-%d/%d-0060/system_led", bus, bus);
 
-  if (type == PIM_TYPE_16Q) {
-    ret = ioctl(dev, I2C_SLAVE, I2C_ADDR_PIM16Q);
-  } else if (type == PIM_TYPE_4DD) {
-    ret = ioctl(dev, I2C_SLAVE, I2C_ADDR_PIM4DD);
-  } else if (type == PIM_TYPE_UNPLUG){
-    return 0;
-  } else {
-    ret = -1;
-  }
-
-  if(ret < 0) {
-    syslog(LOG_ERR, "%s: Cannot get PIM%d type\n", __func__, fru - 3);
-    close(dev);
-    return -1;
-  }
   if(color == FPGA_STS_CLR_BLUE)
-    i2c_smbus_write_byte_data(dev, FPGA_STS_LED_REG, FPGA_STS_CLR_BLUE);
+    write_device(path, "1");
   else if(color == FPGA_STS_CLR_YELLOW)
-    i2c_smbus_write_byte_data(dev, FPGA_STS_LED_REG, FPGA_STS_CLR_YELLOW);
+    write_device(path, "0");
 
-  close(dev);
   return 0;
 }
 
@@ -5630,7 +5691,7 @@ scm_sensor_poll_interval(uint8_t sensor_num, uint32_t *value) {
       *value = 30;
       break;
     default:
-      *value = 10;
+      *value = 30;
       break;
   }
 }
@@ -6505,10 +6566,10 @@ void set_fan_led(int brd_rev)
       set_sled(brd_rev, SLED_CLR_YELLOW, SLED_FAN);
       return;
     }
-    if(val == 0) {
+    if(val <= 800) {
       set_sled(brd_rev, SLED_CLR_YELLOW, SLED_FAN);
       return;
-    }    
+    }
   }
   set_sled(brd_rev, SLED_CLR_BLUE, SLED_FAN);
   return;
@@ -6518,12 +6579,12 @@ void set_psu_led(int brd_rev)
 {
   int i, val_in, val_out12;
   float val_out3;
-  int vin_min = 92;//threshold = 100, error ratio = 0.08
-  int vin_max = 259;// threshold = 240, error ratio = 0.08
-  int vout_12_min = 11;//threshold = 12, error ratio = 0.08
-  int vout_12_max = 13;//threshold = 12, error ratio = 0.08
-  float vout_3_min = 3.00;//threshold = 3.3, error ratio = 0.08
-  float vout_3_max = 3.60;//threshold = 3.3, error ratio = 0.08
+  int vin_min = 92;
+  int vin_max = 310;
+  int vout_12_min = 11;
+  int vout_12_max = 13;
+  float vout_3_min = 3.00;
+  float vout_3_max = 3.60;
   uint8_t psu_num = 4;
   uint8_t prsnt;
   int sensor_num[] = {1, 14, 27, 40};
@@ -6631,6 +6692,7 @@ pal_set_def_key_value(void) {
 int
 pal_init_sensor_check(uint8_t fru, uint8_t snr_num, void *snr) {
   pal_set_def_key_value();
+  psu_init_acok_key(fru);
   return 0;
 }
 

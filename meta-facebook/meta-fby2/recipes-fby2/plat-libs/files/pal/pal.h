@@ -39,11 +39,6 @@ extern "C" {
 #define FRU_STATUS_GOOD   1
 #define FRU_STATUS_BAD    0
 
-#define SETBIT(x, y)        (x | (1LL << y))
-#define GETBIT(x, y)        ((x & (1LL << y)) > y)
-#define CLEARBIT(x, y)      (x & (~(1LL << y)))
-#define GETMASK(y)          (1LL << y)
-
 #define MAX_NODES 4
 #define MAX_NUM_DEVS 12
 
@@ -148,6 +143,7 @@ int pal_get_device_power(uint8_t slot_id, uint8_t dev_id, uint8_t *status, uint8
 void pal_power_policy_control(uint8_t slot_id, char *last_ps);
 int pal_set_server_power(uint8_t slot_id, uint8_t cmd);
 int pal_set_device_power(uint8_t slot_id, uint8_t dev_id, uint8_t cmd);
+int pal_baseboard_clock_control(uint8_t slot_id, char *ctrl);
 int pal_is_server_12v_on(uint8_t slot_id, uint8_t *status);
 int pal_slot_pair_12V_off(uint8_t slot_id);
 bool pal_is_hsvc_ongoing(uint8_t slot_id);
@@ -176,6 +172,7 @@ int pal_get_fru_list(char *list);
 int pal_get_fru_id(char *fru_str, uint8_t *fru);
 int pal_get_dev_id(char *dev_str, uint8_t *dev);
 int pal_get_fru_name(uint8_t fru, char *name);
+int pal_get_dev_name(uint8_t fru, uint8_t dev, char *name);
 int pal_get_fruid_path(uint8_t fru, char *path);
 int pal_get_dev_fruid_path(uint8_t fru, uint8_t dev_id, char *path);
 int pal_get_fruid_eeprom_path(uint8_t fru, char *path);
@@ -257,6 +254,9 @@ int pal_get_tpm_physical_presence(uint8_t slot);
 int pal_create_TPMTimer(int fru);
 int pal_set_tpm_timeout(uint8_t slot, int timeout);
 int pal_set_tpm_physical_presence_reset(uint8_t slot, uint8_t reset);
+int pal_get_sensor_util_timeout(uint8_t fru);
+int pal_set_m2_prsnt(uint8_t slot_id, uint8_t dev_id, uint8_t present);
+int pal_is_ocp30_nic(void);
 #ifdef __cplusplus
 } // extern "C"
 #endif

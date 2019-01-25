@@ -2,9 +2,14 @@
 auto lo
 iface lo inet loopback
 
-iface eth0 inet static
-address 10.10.0.224
-netmask 255.255.255.0
-gateway 10.10.0.1
+#<<<<<<< HEAD
+#iface eth0 inet static
+#address 10.10.0.224
+#netmask 255.255.255.0
+#gateway 10.10.0.1
+#auto eth0
+#
+#=======
 auto eth0
-
+iface eth0 inet dhcp
+#>>>>>>> master

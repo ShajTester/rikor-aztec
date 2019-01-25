@@ -32,11 +32,11 @@ extern "C" {
 #define BIT(value, index) ((value >> index) & 1)
 #endif // BIT
 
-#define SETBIT(x, y)        (x | (1 << y))
-#define GETBIT(x, y)        ((x & (1 << y)) > y)
-#define CLEARBIT(x, y)      (x & (~(1 << y)))
-#define GETMASK(y)          (1 << y)
-#define SETMASK(y)          (1 << y)
+#define SETBIT(x, y)        (x | (1ULL << y))
+#define GETBIT(x, y)        ((x & (1ULL << y)) > y)
+#define CLEARBIT(x, y)      (x & (~(1ULL << y)))
+#define GETMASK(y)          (1ULL << y)
+#define SETMASK(y)          (1ULL << y)
 
 // for threshold-util
 #define THRESHOLD_PATH     "/tmp/thresh-cache"
@@ -253,7 +253,7 @@ int pal_get_fru_discrete_list(uint8_t fru, uint8_t **sensor_list, int *cnt);
 int pal_fruid_write(uint8_t slot, char *path);
 int pal_dev_fruid_write(uint8_t fru, uint8_t dev_id, char *path);
 int pal_get_fru_devtty(uint8_t fru, char *devtty);
-int pal_sensor_check(uint8_t fru, uint8_t sensor_num);
+bool pal_sensor_is_cached(uint8_t fru, uint8_t sensor_num);
 int pal_sensor_read_raw(uint8_t fru, uint8_t sensor_num, void *value);
 int pal_sensor_threshold_flag(uint8_t fru, uint8_t snr_num, uint16_t *flag);
 int pal_alter_sensor_thresh_flag(uint8_t fru, uint8_t snr_num, uint16_t *flag);
@@ -346,6 +346,7 @@ int pal_get_tpm_physical_presence(uint8_t slot);
 int pal_create_TPMTimer(int fru);
 int pal_force_update_bic_fw(uint8_t slot_id, uint8_t comp, char *path);
 void pal_specific_plat_fan_check(bool status);
+int pal_get_sensor_util_timeout(uint8_t fru);
 #ifdef __cplusplus
 }
 #endif

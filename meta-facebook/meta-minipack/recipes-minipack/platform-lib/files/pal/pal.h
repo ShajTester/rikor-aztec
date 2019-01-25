@@ -53,6 +53,7 @@ extern "C" {
 #define SMB_MAC_CPLD_ROV "mac_cpld_rov%d"
 #define SMB_MAC_CPLD_ROV_NUM 8
 #define SCM_PRSNT_STATUS "scm_presnt_status"
+#define SCM_INIT_THRESH_STATUS "scm_init_thresh-status"
 #define PIM_PRSNT_STATUS "pim_fpga_cpld_%d_prsnt_n_status"
 #define FAN_PRSNT_STATUS "fantray%d_present"
 #define PSU_L_PRSNT_STATUS "psu_L%d_present_L"
@@ -62,119 +63,76 @@ extern "C" {
 
 #define LAST_KEY "last_key"
 
-#define I2C_BUS_1_DIR          "/sys/class/i2c-adapter/i2c-1/"
-#define I2C_BUS_3_DIR          "/sys/class/i2c-adapter/i2c-3/"
-#define I2C_BUS_13_DIR         "/sys/class/i2c-adapter/i2c-13/"
-#define I2C_BUS_16_DIR         "/sys/class/i2c-adapter/i2c-16/"
-#define I2C_BUS_17_DIR         "/sys/class/i2c-adapter/i2c-17/"
-#define I2C_BUS_30_DIR         "/sys/class/i2c-adapter/i2c-30/"
-#define I2C_BUS_48_DIR         "/sys/class/i2c-adapter/i2c-48/"
-#define I2C_BUS_49_DIR         "/sys/class/i2c-adapter/i2c-49/"
-#define I2C_BUS_51_DIR         "/sys/class/i2c-adapter/i2c-51/"
-#define I2C_BUS_52_DIR         "/sys/class/i2c-adapter/i2c-52/"
-#define I2C_BUS_56_DIR         "/sys/class/i2c-adapter/i2c-56/"
-#define I2C_BUS_57_DIR         "/sys/class/i2c-adapter/i2c-57/"
-#define I2C_BUS_59_DIR         "/sys/class/i2c-adapter/i2c-59/"
-#define I2C_BUS_60_DIR         "/sys/class/i2c-adapter/i2c-60/"
-#define I2C_BUS_64_DIR         "/sys/class/i2c-adapter/i2c-64/"
-#define I2C_BUS_66_DIR         "/sys/class/i2c-adapter/i2c-66/"
-#define I2C_BUS_67_DIR         "/sys/class/i2c-adapter/i2c-67/"
-#define I2C_BUS_72_DIR         "/sys/class/i2c-adapter/i2c-72/"
-#define I2C_BUS_74_DIR         "/sys/class/i2c-adapter/i2c-74/"
-#define I2C_BUS_75_DIR         "/sys/class/i2c-adapter/i2c-75/"
-#define I2C_BUS_82_DIR         "/sys/class/i2c-adapter/i2c-82/"
-#define I2C_BUS_83_DIR         "/sys/class/i2c-adapter/i2c-83/"
-#define I2C_BUS_84_DIR         "/sys/class/i2c-adapter/i2c-84/"
-#define I2C_BUS_86_DIR         "/sys/class/i2c-adapter/i2c-86/"
-#define I2C_BUS_90_DIR         "/sys/class/i2c-adapter/i2c-90/"
-#define I2C_BUS_91_DIR         "/sys/class/i2c-adapter/i2c-91/"
-#define I2C_BUS_92_DIR         "/sys/class/i2c-adapter/i2c-92/"
-#define I2C_BUS_94_DIR         "/sys/class/i2c-adapter/i2c-94/"
-#define I2C_BUS_98_DIR         "/sys/class/i2c-adapter/i2c-98/"
-#define I2C_BUS_99_DIR         "/sys/class/i2c-adapter/i2c-99/"
-#define I2C_BUS_100_DIR        "/sys/class/i2c-adapter/i2c-100/"
-#define I2C_BUS_102_DIR        "/sys/class/i2c-adapter/i2c-102/"
-#define I2C_BUS_106_DIR        "/sys/class/i2c-adapter/i2c-106/"
-#define I2C_BUS_107_DIR        "/sys/class/i2c-adapter/i2c-107/"
-#define I2C_BUS_108_DIR        "/sys/class/i2c-adapter/i2c-108/"
-#define I2C_BUS_110_DIR        "/sys/class/i2c-adapter/i2c-110/"
-#define I2C_BUS_114_DIR        "/sys/class/i2c-adapter/i2c-114/"
-#define I2C_BUS_115_DIR        "/sys/class/i2c-adapter/i2c-115/"
-#define I2C_BUS_116_DIR        "/sys/class/i2c-adapter/i2c-116/"
-#define I2C_BUS_118_DIR        "/sys/class/i2c-adapter/i2c-118/"
-#define I2C_BUS_122_DIR        "/sys/class/i2c-adapter/i2c-122/"
-#define I2C_BUS_123_DIR        "/sys/class/i2c-adapter/i2c-123/"
-#define I2C_BUS_124_DIR        "/sys/class/i2c-adapter/i2c-124/"
-#define I2C_BUS_126_DIR        "/sys/class/i2c-adapter/i2c-126/"
-#define I2C_BUS_130_DIR        "/sys/class/i2c-adapter/i2c-130/"
-#define I2C_BUS_131_DIR        "/sys/class/i2c-adapter/i2c-131/"
-#define I2C_BUS_132_DIR        "/sys/class/i2c-adapter/i2c-132/"
-#define I2C_BUS_134_DIR        "/sys/class/i2c-adapter/i2c-134/"
-#define I2C_BUS_138_DIR        "/sys/class/i2c-adapter/i2c-138/"
-#define I2C_BUS_139_DIR        "/sys/class/i2c-adapter/i2c-139/"
-#define I2C_BUS_140_DIR        "/sys/class/i2c-adapter/i2c-140/"
-#define I2C_BUS_142_DIR        "/sys/class/i2c-adapter/i2c-142/"
+#define I2C_BUS_DIR(num) "/sys/class/i2c-adapter/i2c-"#num"/"
 
-#define SMB_IR_DEVICE          I2C_BUS_1_DIR"1-0012"
-#define SMB_ISL_DEVICE         I2C_BUS_1_DIR"1-0060"
-#define SMB_1220_DEVICE        I2C_BUS_1_DIR"1-003a/hwmon/hwmon*"
-#define SMB_TEMP1_DEVICE       I2C_BUS_3_DIR"3-0048/hwmon/hwmon*"
-#define SMB_TEMP2_DEVICE       I2C_BUS_3_DIR"3-0049/hwmon/hwmon*"
-#define SMB_TEMP3_DEVICE       I2C_BUS_3_DIR"3-004a/hwmon/hwmon*"
-#define SMB_TEMP4_DEVICE       I2C_BUS_3_DIR"3-004b/hwmon/hwmon*"
-#define SMB_IOB_DEVICE         I2C_BUS_13_DIR"13-0035"
-#define SCM_HSC_DEVICE         I2C_BUS_16_DIR"16-0010/hwmon/hwmon*"
-#define SCM_OUTLET_TEMP_DEVICE I2C_BUS_17_DIR"17-004c/hwmon/hwmon*"
-#define SCM_INLET_TEMP_DEVICE  I2C_BUS_17_DIR"17-004d/hwmon/hwmon*"
-#define SMB_TH3_TEMP_DEVICE    I2C_BUS_30_DIR"30-004c/hwmon/hwmon*"
-#define SMB_PDB_L_TEMP1_DEVICE I2C_BUS_51_DIR"51-0048/hwmon/hwmon*"
-#define SMB_PDB_L_TEMP2_DEVICE I2C_BUS_52_DIR"52-0049/hwmon/hwmon*"
-#define SMB_PDB_R_TEMP1_DEVICE I2C_BUS_59_DIR"59-0048/hwmon/hwmon*"
-#define SMB_PDB_R_TEMP2_DEVICE I2C_BUS_60_DIR"60-0049/hwmon/hwmon*"
-#define SMB_FCM_T_TACH_DEVICE  I2C_BUS_64_DIR"64-0033"
-#define SMB_FCM_T_TEMP1_DEVICE I2C_BUS_66_DIR"66-0048/hwmon/hwmon*"
-#define SMB_FCM_T_TEMP2_DEVICE I2C_BUS_66_DIR"66-0049/hwmon/hwmon*"
-#define SMB_FCM_T_HSC_DEVICE   I2C_BUS_67_DIR"67-0010/hwmon/hwmon*"
-#define SMB_FCM_B_TACH_DEVICE  I2C_BUS_72_DIR"72-0033"
-#define SMB_FCM_B_TEMP1_DEVICE I2C_BUS_74_DIR"74-0048/hwmon/hwmon*"
-#define SMB_FCM_B_TEMP2_DEVICE I2C_BUS_74_DIR"74-0049/hwmon/hwmon*"
-#define SMB_FCM_B_HSC_DEVICE   I2C_BUS_75_DIR"75-0010/hwmon/hwmon*"
-#define PIM1_TEMP1_DEVICE      I2C_BUS_82_DIR"82-0048/hwmon/hwmon*"
-#define PIM1_TEMP2_DEVICE      I2C_BUS_83_DIR"83-004b/hwmon/hwmon*"
-#define PIM1_HSC_DEVICE        I2C_BUS_84_DIR"84-0010/hwmon/hwmon*"
-#define PIM1_34461_DEVICE      I2C_BUS_86_DIR"86-0074/hwmon/hwmon*"
-#define PIM2_TEMP1_DEVICE      I2C_BUS_90_DIR"90-0048/hwmon/hwmon*"
-#define PIM2_TEMP2_DEVICE      I2C_BUS_91_DIR"91-004b/hwmon/hwmon*"
-#define PIM2_HSC_DEVICE        I2C_BUS_92_DIR"92-0010/hwmon/hwmon*"
-#define PIM2_34461_DEVICE      I2C_BUS_94_DIR"94-0074/hwmon/hwmon*"
-#define PIM3_TEMP1_DEVICE      I2C_BUS_98_DIR"98-0048/hwmon/hwmon*"
-#define PIM3_TEMP2_DEVICE      I2C_BUS_99_DIR"99-004b/hwmon/hwmon*"
-#define PIM3_HSC_DEVICE        I2C_BUS_100_DIR"100-0010/hwmon/hwmon*"
-#define PIM3_34461_DEVICE      I2C_BUS_102_DIR"102-0074/hwmon/hwmon*"
-#define PIM4_TEMP1_DEVICE      I2C_BUS_106_DIR"106-0048/hwmon/hwmon*"
-#define PIM4_TEMP2_DEVICE      I2C_BUS_107_DIR"107-004b/hwmon/hwmon*"
-#define PIM4_HSC_DEVICE        I2C_BUS_108_DIR"108-0010/hwmon/hwmon*"
-#define PIM4_34461_DEVICE      I2C_BUS_110_DIR"110-0074/hwmon/hwmon*"
-#define PIM5_TEMP1_DEVICE      I2C_BUS_114_DIR"114-0048/hwmon/hwmon*"
-#define PIM5_TEMP2_DEVICE      I2C_BUS_115_DIR"115-004b/hwmon/hwmon*"
-#define PIM5_HSC_DEVICE        I2C_BUS_116_DIR"116-0010/hwmon/hwmon*"
-#define PIM5_34461_DEVICE      I2C_BUS_118_DIR"118-0074/hwmon/hwmon*"
-#define PIM6_TEMP1_DEVICE      I2C_BUS_122_DIR"122-0048/hwmon/hwmon*"
-#define PIM6_TEMP2_DEVICE      I2C_BUS_123_DIR"123-004b/hwmon/hwmon*"
-#define PIM6_HSC_DEVICE        I2C_BUS_124_DIR"124-0010/hwmon/hwmon*"
-#define PIM6_34461_DEVICE      I2C_BUS_126_DIR"126-0074/hwmon/hwmon*"
-#define PIM7_TEMP1_DEVICE      I2C_BUS_130_DIR"130-0048/hwmon/hwmon*"
-#define PIM7_TEMP2_DEVICE      I2C_BUS_131_DIR"131-004b/hwmon/hwmon*"
-#define PIM7_HSC_DEVICE        I2C_BUS_132_DIR"132-0010/hwmon/hwmon*"
-#define PIM7_34461_DEVICE      I2C_BUS_134_DIR"134-0074/hwmon/hwmon*"
-#define PIM8_TEMP1_DEVICE      I2C_BUS_138_DIR"138-0048/hwmon/hwmon*"
-#define PIM8_TEMP2_DEVICE      I2C_BUS_139_DIR"139-004b/hwmon/hwmon*"
-#define PIM8_HSC_DEVICE        I2C_BUS_140_DIR"140-0010/hwmon/hwmon*"
-#define PIM8_34461_DEVICE      I2C_BUS_142_DIR"142-0074/hwmon/hwmon*"
-#define PSU1_DEVICE            I2C_BUS_49_DIR"49-0059"
-#define PSU2_DEVICE            I2C_BUS_48_DIR"48-0058"
-#define PSU3_DEVICE            I2C_BUS_57_DIR"57-0059"
-#define PSU4_DEVICE            I2C_BUS_56_DIR"56-0058"
+#define SMB_IR_DEVICE          I2C_BUS_DIR(1)"1-0012"
+#define SMB_ISL_DEVICE         I2C_BUS_DIR(1)"1-0060"
+#define SMB_1220_DEVICE        I2C_BUS_DIR(1)"1-003a/hwmon/hwmon*"
+#define SMB_TEMP1_DEVICE       I2C_BUS_DIR(3)"3-0048/hwmon/hwmon*"
+#define SMB_TEMP2_DEVICE       I2C_BUS_DIR(3)"3-0049/hwmon/hwmon*"
+#define SMB_TEMP3_DEVICE       I2C_BUS_DIR(3)"3-004a/hwmon/hwmon*"
+#define SMB_TEMP4_DEVICE       I2C_BUS_DIR(3)"3-004b/hwmon/hwmon*"
+#define SMB_IOB_DEVICE         I2C_BUS_DIR(13)"13-0035"
+#define SCM_HSC_DEVICE         I2C_BUS_DIR(16)"16-0010/hwmon/hwmon*"
+#define SCM_OUTLET_TEMP_DEVICE I2C_BUS_DIR(17)"17-004c/hwmon/hwmon*"
+#define SCM_INLET_TEMP_DEVICE  I2C_BUS_DIR(17)"17-004d/hwmon/hwmon*"
+#define SMB_TH3_TEMP_DEVICE    I2C_BUS_DIR(30)"30-004c/hwmon/hwmon*"
+#define PSU2_DEVICE            I2C_BUS_DIR(48)"48-0058"
+#define PSU1_DEVICE            I2C_BUS_DIR(49)"49-0059"
+#define PSU4_DEVICE            I2C_BUS_DIR(56)"56-0058"
+#define PSU3_DEVICE            I2C_BUS_DIR(57)"57-0059"
+#define SMB_PDB_L_TEMP1_DEVICE I2C_BUS_DIR(51)"51-0048/hwmon/hwmon*"
+#define SMB_PDB_L_TEMP2_DEVICE I2C_BUS_DIR(52)"52-0049/hwmon/hwmon*"
+#define SMB_PDB_R_TEMP1_DEVICE I2C_BUS_DIR(59)"59-0048/hwmon/hwmon*"
+#define SMB_PDB_R_TEMP2_DEVICE I2C_BUS_DIR(60)"60-0049/hwmon/hwmon*"
+#define SMB_FCM_T_TACH_DEVICE  I2C_BUS_DIR(64)"64-0033"
+#define SMB_FCM_T_TEMP1_DEVICE I2C_BUS_DIR(66)"66-0048/hwmon/hwmon*"
+#define SMB_FCM_T_TEMP2_DEVICE I2C_BUS_DIR(66)"66-0049/hwmon/hwmon*"
+#define SMB_FCM_T_HSC_DEVICE   I2C_BUS_DIR(67)"67-0010/hwmon/hwmon*"
+#define SMB_FCM_B_TACH_DEVICE  I2C_BUS_DIR(72)"72-0033"
+#define SMB_FCM_B_TEMP1_DEVICE I2C_BUS_DIR(74)"74-0048/hwmon/hwmon*"
+#define SMB_FCM_B_TEMP2_DEVICE I2C_BUS_DIR(74)"74-0049/hwmon/hwmon*"
+#define SMB_FCM_B_HSC_DEVICE   I2C_BUS_DIR(75)"75-0010/hwmon/hwmon*"
+#define PIM1_DOM_DEVICE        I2C_BUS_DIR(80)"80-0060"
+#define PIM1_TEMP1_DEVICE      I2C_BUS_DIR(82)"82-0048/hwmon/hwmon*"
+#define PIM1_TEMP2_DEVICE      I2C_BUS_DIR(83)"83-004b/hwmon/hwmon*"
+#define PIM1_HSC_DEVICE        I2C_BUS_DIR(84)"84-0010/hwmon/hwmon*"
+#define PIM1_34461_DEVICE      I2C_BUS_DIR(86)"86-0074"
+#define PIM2_DOM_DEVICE        I2C_BUS_DIR(88)"88-0060"
+#define PIM2_TEMP1_DEVICE      I2C_BUS_DIR(90)"90-0048/hwmon/hwmon*"
+#define PIM2_TEMP2_DEVICE      I2C_BUS_DIR(91)"91-004b/hwmon/hwmon*"
+#define PIM2_HSC_DEVICE        I2C_BUS_DIR(92)"92-0010/hwmon/hwmon*"
+#define PIM2_34461_DEVICE      I2C_BUS_DIR(94)"94-0074"
+#define PIM3_DOM_DEVICE        I2C_BUS_DIR(96)"96-0060"
+#define PIM3_TEMP1_DEVICE      I2C_BUS_DIR(98)"98-0048/hwmon/hwmon*"
+#define PIM3_TEMP2_DEVICE      I2C_BUS_DIR(99)"99-004b/hwmon/hwmon*"
+#define PIM3_HSC_DEVICE        I2C_BUS_DIR(100)"100-0010/hwmon/hwmon*"
+#define PIM3_34461_DEVICE      I2C_BUS_DIR(102)"102-0074"
+#define PIM4_DOM_DEVICE        I2C_BUS_DIR(104)"104-0060"
+#define PIM4_TEMP1_DEVICE      I2C_BUS_DIR(106)"106-0048/hwmon/hwmon*"
+#define PIM4_TEMP2_DEVICE      I2C_BUS_DIR(107)"107-004b/hwmon/hwmon*"
+#define PIM4_HSC_DEVICE        I2C_BUS_DIR(108)"108-0010/hwmon/hwmon*"
+#define PIM4_34461_DEVICE      I2C_BUS_DIR(110)"110-0074"
+#define PIM5_DOM_DEVICE        I2C_BUS_DIR(112)"112-0060"
+#define PIM5_TEMP1_DEVICE      I2C_BUS_DIR(114)"114-0048/hwmon/hwmon*"
+#define PIM5_TEMP2_DEVICE      I2C_BUS_DIR(115)"115-004b/hwmon/hwmon*"
+#define PIM5_HSC_DEVICE        I2C_BUS_DIR(116)"116-0010/hwmon/hwmon*"
+#define PIM5_34461_DEVICE      I2C_BUS_DIR(118)"118-0074"
+#define PIM6_DOM_DEVICE        I2C_BUS_DIR(120)"120-0060"
+#define PIM6_TEMP1_DEVICE      I2C_BUS_DIR(122)"122-0048/hwmon/hwmon*"
+#define PIM6_TEMP2_DEVICE      I2C_BUS_DIR(123)"123-004b/hwmon/hwmon*"
+#define PIM6_HSC_DEVICE        I2C_BUS_DIR(124)"124-0010/hwmon/hwmon*"
+#define PIM6_34461_DEVICE      I2C_BUS_DIR(126)"126-0074"
+#define PIM7_DOM_DEVICE        I2C_BUS_DIR(128)"128-0060"
+#define PIM7_TEMP1_DEVICE      I2C_BUS_DIR(130)"130-0048/hwmon/hwmon*"
+#define PIM7_TEMP2_DEVICE      I2C_BUS_DIR(131)"131-004b/hwmon/hwmon*"
+#define PIM7_HSC_DEVICE        I2C_BUS_DIR(132)"132-0010/hwmon/hwmon*"
+#define PIM7_34461_DEVICE      I2C_BUS_DIR(134)"134-0074"
+#define PIM8_DOM_DEVICE        I2C_BUS_DIR(136)"136-0060"
+#define PIM8_TEMP1_DEVICE      I2C_BUS_DIR(138)"138-0048/hwmon/hwmon*"
+#define PIM8_TEMP2_DEVICE      I2C_BUS_DIR(139)"139-004b/hwmon/hwmon*"
+#define PIM8_HSC_DEVICE        I2C_BUS_DIR(140)"140-0010/hwmon/hwmon*"
+#define PIM8_34461_DEVICE      I2C_BUS_DIR(142)"142-0074"
 
 #define TEMP(x)  "temp"#x"_input"
 #define VOLT(x)  "in"#x"_input"
@@ -195,11 +153,12 @@ extern "C" {
 #define GPIO_POSTCODE_7     "/tmp/gpionames/GPIOH7/%s"
 #define GPIO_SCM_USB_PRSNT  "/tmp/gpionames/SCM_USB_PRSNT/%s"
 
-#define MAX_RETRIES_SDR_INIT  30
+#define MAX_SDR_THRESH_RETRY 30
 #define MAX_READ_RETRY 10
 #define DELAY_POWER_OFF 5
 #define DELAY_POWER_CYCLE 10
 
+#define MAX_POS_READING_MARGIN 127
 #define LARGEST_DEVICE_NAME 128
 #define MINIPACK_MAX_NUM_SLOTS 1
 
@@ -235,7 +194,6 @@ extern "C" {
 #define I2C_ADDR_PIM16Q 0x60
 #define I2C_ADDR_PIM4DD 0x61
 
-#define FPGA_STS_LED_REG 0x82
 #define FPGA_STS_CLR_BLUE 0x01
 #define FPGA_STS_CLR_YELLOW 0x05
 
@@ -650,6 +608,12 @@ enum {
 
 enum
 {
+  PSU_ACOK_DOWN = 0,
+  PSU_ACOK_UP = 1
+};
+
+enum
+{
   SLED_CLR_BLUE = 0x3,
   SLED_CLR_YELLOW = 0x4,
   SLED_CLR_RED = 0x6,
@@ -675,6 +639,19 @@ enum {
   PIM_TYPE_16Q = 1,
   PIM_TYPE_4DD = 2,
   PIM_TYPE_NONE = 3
+};
+
+enum {
+  MODE_AUTO	= 0,
+  MODE_QUICK = 1,
+  MODE_READ = 2
+};
+
+enum {
+  I2C_BUS_ERROR	= -1,
+  I2C_FUNC_ERROR	= 1,
+  I2C_DEVICE_ERROR = 2,
+  I2c_DRIVER_EXIST = 3
 };
 
 int pal_handle_oem_1s_intr(uint8_t slot, uint8_t *data);
@@ -715,7 +692,7 @@ int pal_get_sensor_threshold(uint8_t fru, uint8_t sensor_num, uint8_t thresh, vo
 void pal_sensor_assert_handle(uint8_t fru, uint8_t snr_num, float val, uint8_t thresh);
 void pal_sensor_deassert_handle(uint8_t fru, uint8_t snr_num, float val, uint8_t thresh);
 int pal_sensor_threshold_flag(uint8_t fru, uint8_t snr_num, uint16_t *flag);
-int pal_detect_i2c_device(uint8_t bus_num, uint8_t addr);
+int pal_detect_i2c_device(uint8_t bus, uint8_t addr, uint8_t mode, uint8_t force);
 int pal_add_i2c_device(uint8_t bus, uint8_t addr, char *device_name);
 int pal_del_i2c_device(uint8_t bus, uint8_t addr);
 int pal_get_pim_type(uint8_t fru);

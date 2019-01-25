@@ -550,7 +550,7 @@ app_get_device_id (unsigned char *request, unsigned char req_len,
   unsigned char *data = &res->data[0];
   FILE *fp=NULL;
   int fv_major = 0x01, fv_minor = 0x03;
-  char buffer[32];
+  char buffer[64];
 
   if(length_check(0, req_len, response, res_len))
   {
@@ -561,7 +561,7 @@ app_get_device_id (unsigned char *request, unsigned char req_len,
   if (fp != NULL)
   {
      if (fgets(buffer, sizeof(buffer), fp))
-         sscanf(buffer, "%*[^v]v%d.%d", &fv_major, &fv_minor);
+         sscanf(buffer, "%*[^-]-v%d.%d", &fv_major, &fv_minor);
      fclose(fp);
   }
 
@@ -2105,7 +2105,7 @@ oem_q_set_proc_info (unsigned char *request, unsigned char req_len, unsigned cha
   if (req_len < 8 || req_len >= sizeof(payload) ||
       (req->data[4] >= numOfParam) ||
       (strlen(cpu_info_key[ (int) req->data[4]]) == 0))
-      
+
   {
     res->cc = CC_PARAM_OUT_OF_RANGE;
     *res_len = 0;
@@ -3072,6 +3072,34 @@ oem_add_cper_log(unsigned char *request, unsigned char req_len,
 }
 
 static void
+oem_set_m2_info (unsigned char *request, unsigned char req_len, unsigned char *response,
+                 unsigned char *res_len)
+{
+  ipmi_mn_req_t *req = (ipmi_mn_req_t *) request;
+  ipmi_res_t *res = (ipmi_res_t *) response;
+  char key[100] = {0};
+  char payload[100] = {0};
+  unsigned char cmd_len = 8;
+
+  if (length_check(cmd_len, req_len, response, res_len))
+    return;
+
+  sprintf(key, "sys_config/fru%d_m2_%d_info", req->payload_id, req->data[0]);
+
+  memcpy(payload, &req->data[1], req_len - 4);
+  if(kv_set(key, payload, req_len - 4, KV_FPERSIST)) {
+    res->cc = CC_UNSPECIFIED_ERROR;
+    *res_len = 0;
+    return;
+  }
+
+  res->cc = CC_SUCCESS;
+  *res_len = 0;
+
+  return;
+}
+
+static void
 oem_bbv_power_cycle ( unsigned char *request, unsigned char req_len,
                   unsigned char *response, unsigned char *res_len)
 {
@@ -3149,7 +3177,7 @@ ipmi_handle_oem (unsigned char *request, unsigned char req_len,
     case CMD_OEM_SET_BOOT_ORDER:
       if(length_check(SIZE_BOOT_ORDER, req_len, response, res_len)) {
         break;
-      } 
+      }
       oem_set_boot_order(request, req_len, response, res_len);
       break;
     case CMD_OEM_GET_BOOT_ORDER:
@@ -3232,7 +3260,10 @@ ipmi_handle_oem (unsigned char *request, unsigned char req_len,
       break;
     case CMD_OEM_ADD_CPER_LOG:
       oem_add_cper_log(request, req_len, response, res_len);
-      break;  
+      break;
+    case CMD_OEM_SET_M2_INFO:
+      oem_set_m2_info(request, req_len, response, res_len);
+      break;
     default:
       res->cc = CC_INVALID_CMD;
       break;
@@ -3794,7 +3825,7 @@ conn_handler(client_t *cli) {
   unsigned char req_buf[MAX_IPMI_MSG_SIZE];
   unsigned char res_buf[MAX_IPMI_MSG_SIZE];
   size_t req_len = MAX_IPMI_MSG_SIZE, res_len = 0;
-  
+
   memset(req_buf, 0, sizeof(req_buf));
   memset(res_buf, 0, sizeof(res_buf));
 
