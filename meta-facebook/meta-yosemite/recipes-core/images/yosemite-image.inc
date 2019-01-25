@@ -10,18 +10,18 @@ UBOOT_IMAGE_ENTRYPOINT = "0x40008000"
 
 # Include modules in rootfs
 IMAGE_INSTALL += " packagegroup-openbmc-base"
-# IMAGE_INSTALL += " healthd"
-# IMAGE_INSTALL += " fbutils"
+IMAGE_INSTALL += " healthd"
+IMAGE_INSTALL += " fbutils"
 # IMAGE_INSTALL += " fan-util"
 # IMAGE_INSTALL += " fscd"
 IMAGE_INSTALL += " watchdog-ctrl"
 IMAGE_INSTALL += " sensor-setup"
-# IMAGE_INSTALL += " ipmid"
-# IMAGE_INSTALL += " packagegroup-openbmc-net"
+IMAGE_INSTALL += " ipmid"
+IMAGE_INSTALL += " packagegroup-openbmc-net"
 # IMAGE_INSTALL += " packagegroup-openbmc-python3"
 # IMAGE_INSTALL += " packagegroup-openbmc-rest3"
-# IMAGE_INSTALL += " fruid"
-# IMAGE_INSTALL += " ipmbd"
+IMAGE_INSTALL += " fruid"
+IMAGE_INSTALL += " ipmbd"
 # IMAGE_INSTALL += " bic-cached"
 # IMAGE_INSTALL += " bic-util"
 # IMAGE_INSTALL += " yosemite-sensors"
@@ -53,6 +53,10 @@ IMAGE_FEATURES += " ssh-server-openssh"
 # DISTRO_FEATURES += " usbgadget"
 # DISTRO_FEATURES += " usbhost"
  
+
+# IMAGE_INSTALL += " ltrace_git"
+IMAGE_INSTALL += " ipmb-util"
+IMAGE_INSTALL += " ipmi-util"
 
 ###################################
 # Свои проекты

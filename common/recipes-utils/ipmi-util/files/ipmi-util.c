@@ -59,6 +59,13 @@ main(int argc, char **argv) {
     tbuf[tlen++] = (uint8_t)strtoul(argv[i], NULL, 0);
   }
 
+  // Print the request
+  printf("Request ");
+  for (i = 0; i < tlen; i++) {
+    printf("%02X ", tbuf[i]);
+  }
+  printf("\n");
+
   // Invoke IPMB library handler
   lib_ipmi_handle(tbuf, tlen, rbuf, &rlen);
 
@@ -68,6 +75,7 @@ main(int argc, char **argv) {
   }
 
   // Print the response
+  printf("Response ");
   for (i = 0; i < rlen; i++) {
     printf("%02X ", rbuf[i]);
   }
