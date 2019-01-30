@@ -1,10 +1,10 @@
-SRCBRANCH = "dev-4.17"
+SRCBRANCH = "dev-4.18"
 SRCREV = "AUTOINC"
 
 SRC_URI = "git://github.com/facebook/openbmc-linux.git;branch=${SRCBRANCH};protocol=https \
           "
 
-LINUX_VERSION ?= "4.17.2"
+LINUX_VERSION ?= "4.18.16"
 LINUX_VERSION_EXTENSION ?= "-aspeed"
 LIC_FILES_CHKSUM = "file://COPYING;md5=bbea815ee2795b2f4230826c0c6b8814"
 
