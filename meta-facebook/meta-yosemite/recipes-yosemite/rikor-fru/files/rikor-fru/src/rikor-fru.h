@@ -5,7 +5,7 @@
 
 #include <linux/types.h>
 
-#define EEPROM_PATH "/sys/devices/platform/ast-i2c.3/i2c-3/3-0050/eeprom"
+#define EEPROM_PATH "/sys/devices/platform/ast-i2c.3/i2c-3/3-0052/eeprom"
 
 #define ERRCRC      -2
 
