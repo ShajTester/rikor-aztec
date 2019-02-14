@@ -1,0 +1,41 @@
+diff --git a/arch/arm/plat-aspeed/dev-eth.c b/arch/arm/plat-aspeed/dev-eth.c
+index 7e28d00..4375575 100644
+--- a/arch/arm/plat-aspeed/dev-eth.c
++++ b/arch/arm/plat-aspeed/dev-eth.c
+@@ -46,7 +46,8 @@
+ 	defined(CONFIG_YOSEMITE) || defined(CONFIG_MINIPACK) || \
+ 	defined(CONFIG_MINILAKETB) || defined(CONFIG_YAMP) || \
+ 	defined(CONFIG_GALAXY100)
+-#define DRVNAME "ftgmac100"
++// #define DRVNAME "ftgmac100"
++#define DRVNAME "ast_gmac"
+ #else
+ #define DRVNAME "ast_gmac"
+ #endif
+@@ -76,7 +77,7 @@ static struct resource ast_mac0_resources[] = {
+ };
+ 
+ static struct platform_device ast_eth0_device = {
+-	.name		= DRVNAME,
++	.name		= "ftgmac100",
+ 	.id		= 0,
+ 	.dev		= {
+ 				.dma_mask		= &ast_eth_dmamask,
+@@ -107,7 +108,7 @@ static struct resource ast_mac1_resources[] = {
+ };
+ 
+ static struct platform_device ast_eth1_device = {
+-	.name		= DRVNAME,
++	.name		= "realtek",
+ 	.id		= 1,
+ 	.dev		= {
+ 				.dma_mask		= &ast_eth_dmamask,
+@@ -224,6 +225,8 @@ void __init ast_add_device_gmac(void)
+ 
+ 	platform_device_register(&ast_eth1_device);
+ 
++	printf("PLATFORM_DEVICE_REGISTER(&AST_ETH1_DEVICE);\n");
++
+ #endif // #ifdef AST_MAC1_BASE
+ #endif //  #if !defined(CONFIG_PWNEPTUNE)
+ }
