@@ -21,13 +21,14 @@ DESCRIPTION = "Util for multiplexing terminal"
 SECTION = "base"
 PR = "r1"
 LICENSE = "GPLv2"
-LIC_FILES_CHKSUM = "file://gpio.c;beginline=4;endline=16;md5=da35978751a9d71b73679307c4d296ec"
+LIC_FILES_CHKSUM = "file://LICENSE;md5=8264535c0c4e9c6c335635c4026a8022"
 
 SRC_URI = "file://gpio.c \
            file://gpio_name.c \
            file://gpio.h \
            file://gpio_name.h \
            file://Makefile \
+           file://LICENSE \
           "
 
 S = "${WORKDIR}"

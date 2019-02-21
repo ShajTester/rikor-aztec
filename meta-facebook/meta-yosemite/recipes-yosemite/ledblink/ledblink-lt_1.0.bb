@@ -6,14 +6,15 @@
 DESCRIPTION = "LED blink application"
 SECTION = "examples"
 DEPENDS = ""
-LICENSE = "MIT"
-LIC_FILES_CHKSUM = "file://ledblink-1.0;md5=d69079b8a5dfb6799461178e64482db2"
+LICENSE = "GPL-2"
+LIC_FILES_CHKSUM = "file://LICENSE;md5=8264535c0c4e9c6c335635c4026a8022"
 
 # This tells bitbake where to find the files we're providing on the local filesystem
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}-${PV}:"
 
 # Use local tarball
-SRC_URI = "file://ledblink-${PV}"
+SRC_URI = "file://ledblink-${PV} \
+           file://LICENSE "
 
 # Make sure our source directory (for the build) matches the directory structure in the tarball
 S = "${WORKDIR}"
