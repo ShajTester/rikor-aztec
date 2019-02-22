@@ -15,11 +15,28 @@
 # 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301 USA
 
-binary: gpio_name.o 
-	$(CC) -o rikgpio gpio_name.o  
 
-gpio_name.o: gpio_name.c
-	$(CC) -c -I /home/tohas/fbook_openbmc/openBMC_rev2/openbmc/common/recipes-core/rikgpio/files gpio_name.c
+
+# binary: gpio_name.o 
+# 	$(CC) -o rikgpio gpio_name.o  
+
+# gpio_name.o: gpio_name.c
+# 	$(CC) -c -I /home/tohas/fbook_openbmc/openBMC_rev2/openbmc/common/recipes-core/rikgpio/files gpio_name.c
+
+# clean:
+# 	rm -f *.o binary
+
+
+
+all: rikgpio
+
+CFLAGS += -Wall -Werror
+
+rikgpio: gpio-name.c 
+	$(CC) $(CFLAGS) -D _XOPEN_SOURCE -pthread -std=c99 -o $@ $^ $(LDFLAGS)
+
+.PHONY: clean
 
 clean:
-	rm -f *.o binary
+	rm -rf *.o rikgpio
+

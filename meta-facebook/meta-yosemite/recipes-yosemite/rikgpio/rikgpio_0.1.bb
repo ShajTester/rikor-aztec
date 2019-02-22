@@ -16,16 +16,14 @@
 # Boston, MA 02110-1301 USA
 #
 
-SUMMARY = "Terminal Multiplexer"
-DESCRIPTION = "Util for multiplexing terminal"
+SUMMARY = ""
+DESCRIPTION = ""
 SECTION = "base"
 PR = "r1"
 LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=8264535c0c4e9c6c335635c4026a8022"
 
-SRC_URI = "file://gpio.c \
-           file://gpio_name.c \
-           file://gpio.h \
+SRC_URI = "file://gpio_name.c \
            file://gpio_name.h \
            file://Makefile \
            file://LICENSE \
