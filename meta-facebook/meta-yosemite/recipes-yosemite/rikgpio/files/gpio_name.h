@@ -75,7 +75,7 @@
 #define FM_CPU0_MEMCD_MEMHOT_DIR	0
 #define FM_CPU0_MEMAB_MEMHOT_DIR	0
 
-#define FM_BMC_ONCTL_DIR			1		//1 -по идее должен быть output - TODO
+#define FM_BMC_ONCTL_DIR			0		//1 -по идее должен быть output - TODO
 
 #define FP_LED_STATUS_AMBER_DIR		1
 #define FM_INTRUDER_HDR_DIR			0

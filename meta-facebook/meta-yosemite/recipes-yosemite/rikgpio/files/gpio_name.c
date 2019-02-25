@@ -22,6 +22,8 @@
 int gpio_num(char *str);		//Primitive
 int gpio_export(int gpio);
 int gpio_set_direction(short dir, int gpionum);
+int gpio_set_value(short val, int gpionum);
+
 /********************************************************************************************/
 //static char *gpio_rikor[3] = {"GPIOQ7", "GPIOQ4", "GPIOY3"};
 static char *gpio_rikor[36] = {FM_SLPS4, FM_SLPS3, FM_MEM_THERM_EVENT, FM_PCH_BMC_THERMTRIP, FM_CPU_CATERR, FM_CPU_ERR2, IRQ_SERIAL, FM_BMC_MIC_MUX_RST, FM_BMC_PCH_SMI_LPC, SPEAKER_BMC, FP_ID_LED, 
@@ -49,7 +51,7 @@ void main(void)
     if (tmp < 0)
     {
 #ifdef DEBUG_MODE
-      printf("Failed to enum %c port\n", (char)gpio_rikor[i]);
+      printf("Failed to enum %s port\n", gpio_rikor[i]);
 #endif	//DEBUG_MODE
       gpio_rikor_num[i] = 0;
     }
@@ -67,14 +69,23 @@ void main(void)
     tmp = gpio_export(gpio_rikor_num[i]);
   }
 
+
   for (int i=0; i<36; i++)
   {
     tmp = gpio_set_direction(gpio_dir[i], gpio_rikor_num[i]);
     //For some outputs
-    if (i == 21) system("/usr/bin/ledblink-1.0 135 &");             //135 - AMBER led gpio
   }
+  
+  gpio_set_value(1, gpio_num(FP_ID_LED));
+  gpio_set_value(1, gpio_num(FP_LED_STATUS_AMBER));
+  gpio_set_value(1, gpio_num(FP_LED_STATUS_GREEN));
+
+
+  system("/usr/bin/ledblink-1.0 135 10 &");             //135 - AMBER led gpio
+
   printf("Complete...\n");
-  return NULL;
+
+  return;
 }
 
 /********************************************************************************************/
@@ -134,6 +145,34 @@ int gpio_set_direction(short dir, int gpionum)
   else val = "out";
 
   write(fd, val, strlen(val));
+
+  if (fd != -1) {
+    close(fd);
+  }
+  return -rc;
+}
+
+
+
+/********************************************************************************************/
+int gpio_set_value(short val, int gpionum)
+{
+  char buf[128];
+  int fd = -1;
+  int rc = 0;
+  char *outstr;
+
+  snprintf(buf, sizeof(buf), "/sys/class/gpio/gpio%d/value", gpionum);
+  fd = open(buf, O_WRONLY);
+  if (fd == -1) {
+    rc = errno;
+    return -rc;
+  }
+
+  if (val != 0) outstr = "1";
+  else outstr = "0";
+
+  write(fd, outstr, strlen(outstr));
 
   if (fd != -1) {
     close(fd);
