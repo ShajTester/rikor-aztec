@@ -32,8 +32,8 @@ all: rikgpio
 
 CFLAGS += -Wall -Werror
 
-rikgpio: gpio-name.c 
-	$(CC) $(CFLAGS) -D _XOPEN_SOURCE -pthread -std=c99 -o $@ $^ $(LDFLAGS)
+rikgpio: rikgpio.c 
+	$(CC) $(CFLAGS) -D _XOPEN_SOURCE -pthread -lgpio -std=c99 -o $@ $^ $(LDFLAGS)
 
 .PHONY: clean
 

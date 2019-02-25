@@ -23,13 +23,15 @@ PR = "r1"
 LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=8264535c0c4e9c6c335635c4026a8022"
 
-SRC_URI = "file://gpio_name.c \
+SRC_URI = "file://rikgpio.c \
            file://gpio_name.h \
            file://Makefile \
            file://LICENSE \
           "
 
 S = "${WORKDIR}"
+
+DEPENDS += " libgpio update-rc.d-native"
 
 pkgdir = "rikgpio"
 
@@ -45,4 +47,7 @@ do_install() {
 FBPACKAGEDIR = "${prefix}/local/fbpackages"
 
 FILES_${PN} = "${FBPACKAGEDIR}/rikgpio ${prefix}/local/bin"
+
+RDEPENDS_${PN} = "libgpio"
+
 
