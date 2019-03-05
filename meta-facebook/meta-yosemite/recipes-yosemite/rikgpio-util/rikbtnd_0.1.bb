@@ -23,31 +23,28 @@ PR = "r1"
 LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=8264535c0c4e9c6c335635c4026a8022"
 
-SRC_URI = "file://rikgpio.c \
-           file://gpio_name.h \
-           file://Makefile \
-           file://LICENSE \
+SRC_URI = "file://rikbtnd \
           "
 
-S = "${WORKDIR}"
+S = "${WORKDIR}/rikbtnd"
 
-DEPENDS += " libgpio update-rc.d-native"
+DEPENDS += " glibc libgpio update-rc.d-native "
 
-pkgdir = "rikgpio"
+pkgdir = "rikbtnd"
 
 do_install() {
   dst="${D}/usr/local/fbpackages/${pkgdir}"
   bin="${D}/usr/local/bin"
   install -d $dst
   install -d $bin
-  install -m 755 rikgpio ${dst}/rikgpio
-  ln -snf ../fbpackages/${pkgdir}/rikgpio ${bin}/rikgpio
+  install -m 755 rikbtnd ${dst}/rikbtnd
+  ln -snf ../fbpackages/${pkgdir}/rikbtnd ${bin}/rikbtnd
 }
 
 FBPACKAGEDIR = "${prefix}/local/fbpackages"
 
-FILES_${PN} = "${FBPACKAGEDIR}/rikgpio ${prefix}/local/bin"
+FILES_${PN} = "${FBPACKAGEDIR}/rikbtnd ${prefix}/local/bin"
 
-RDEPENDS_${PN} = "libgpio"
+RDEPENDS_${PN} = "glibc libgpio"
 
 

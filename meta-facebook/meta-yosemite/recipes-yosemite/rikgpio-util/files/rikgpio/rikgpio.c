@@ -13,7 +13,7 @@
 #include <sys/types.h>
 #include <sys/errno.h>
 
-#include <openbmc/gpio.h>
+// #include <openbmc/gpio.h>
 
 #include "gpio_name.h"
 
@@ -21,10 +21,10 @@
 #define DEBUG_MODE
 
 /********************************************************************************************/
-// int gpio_num(char *str);		//Primitive
-// int gpio_export(int gpio);
-// int gpio_set_direction(short dir, int gpionum);
-// int gpio_set_value(short val, int gpionum);
+int gpio_num(char *str);		//Primitive
+int gpio_export(int gpio);
+int gpio_set_direction(short dir, int gpionum);
+int gpio_set_value(short val, int gpionum);
 
 /********************************************************************************************/
 //static char *gpio_rikor[3] = {"GPIOQ7", "GPIOQ4", "GPIOY3"};
@@ -42,7 +42,7 @@ static short gpio_dir[36] = {FM_SLPS4_DIR, FM_SLPS3_DIR, FM_MEM_THERM_EVENT_DIR,
 int gpio_rikor_num[36] = {};
 /********************************************************************************************/
 
-void main(void)
+int main(void)
 {
   int tmp = 0;
 
@@ -78,106 +78,106 @@ void main(void)
     //For some outputs
   }
   
-  gpio_set(gpio_num(FP_ID_LED), GPIO_VALUE_HIGH);
-  gpio_set(gpio_num(FP_LED_STATUS_AMBER), GPIO_VALUE_HIGH);
-  gpio_set(gpio_num(FP_LED_STATUS_GREEN), GPIO_VALUE_HIGH);
+  gpio_set_value(1, gpio_num(FP_ID_LED));
+  gpio_set_value(1, gpio_num(FP_LED_STATUS_AMBER));
+  gpio_set_value(1, gpio_num(FP_LED_STATUS_GREEN));
 
 
   system("/usr/bin/ledblink-1.0 135 10 &");             //135 - AMBER led gpio
 
   printf("Complete...\n");
 
-  return;
+  return 0;
 }
 
-// /********************************************************************************************/
-// int gpio_num(char *str)
-// {
-//   int len = strlen(str);
-//   int ret = 0;
+/********************************************************************************************/
+int gpio_num(char *str)
+{
+  int len = strlen(str);
+  int ret = 0;
 
-//   if (len != 6 && len != 7) {
-//     return -1;
-//   }
-//   ret = str[len-1] - '0' + (8 * (str[len-2] - 'A'));
-//   if (len == 7)
-//     ret += GPIO_BASE_AA0;
-//   return ret;
-// }
+  if (len != 6 && len != 7) {
+    return -1;
+  }
+  ret = str[len-1] - '0' + (8 * (str[len-2] - 'A'));
+  if (len == 7)
+    ret += GPIO_BASE_AA0;
+  return ret;
+}
 
-// /********************************************************************************************/
-// int gpio_export(int gpio)
-// {
-//   char buf[128] = {0};
-//   int fd = -1;
-//   int rc = 0;
-//   int len;
+/********************************************************************************************/
+int gpio_export(int gpio)
+{
+  char buf[128] = {0};
+  int fd = -1;
+  int rc = 0;
+  int len;
 
-//   snprintf(buf, sizeof(buf), "/sys/class/gpio/export");
-//   fd = open(buf, O_WRONLY);
-//   if (fd == -1) {
-//     rc = errno;
-//     printf("Failed to export %d gpioport...\n", (int)gpio);
-//     return -rc;
-//   }
+  snprintf(buf, sizeof(buf), "/sys/class/gpio/export");
+  fd = open(buf, O_WRONLY);
+  if (fd == -1) {
+    rc = errno;
+    printf("Failed to export %d gpioport...\n", (int)gpio);
+    return -rc;
+  }
 
-//   len = snprintf(buf, sizeof(buf), "%d", gpio);
-//   write(fd, buf, len);
-//   close(fd);
+  len = snprintf(buf, sizeof(buf), "%d", gpio);
+  write(fd, buf, len);
+  close(fd);
 
-//   return rc;
-// }
+  return rc;
+}
 
-// /********************************************************************************************/
-// int gpio_set_direction(short dir, int gpionum)
-// {
-//   char buf[128];
-//   int fd = -1;
-//   int rc = 0;
-//   char *val;
+/********************************************************************************************/
+int gpio_set_direction(short dir, int gpionum)
+{
+  char buf[128];
+  int fd = -1;
+  int rc = 0;
+  char *val;
 
-//   snprintf(buf, sizeof(buf), "/sys/class/gpio/gpio%d/direction", (int)gpionum);
-//   fd = open(buf, O_WRONLY);
-//   if (fd == -1) {
-//     rc = errno;
-//     return -rc;
-//   }
+  snprintf(buf, sizeof(buf), "/sys/class/gpio/gpio%d/direction", (int)gpionum);
+  fd = open(buf, O_WRONLY);
+  if (fd == -1) {
+    rc = errno;
+    return -rc;
+  }
 
-//   if (dir == 0) val = "in";
-//   else val = "out";
+  if (dir == 0) val = "in";
+  else val = "out";
 
-//   write(fd, val, strlen(val));
+  write(fd, val, strlen(val));
 
-//   if (fd != -1) {
-//     close(fd);
-//   }
-//   return -rc;
-// }
+  if (fd != -1) {
+    close(fd);
+  }
+  return -rc;
+}
 
 
 
-// /********************************************************************************************/
-// int gpio_set_value(short val, int gpionum)
-// {
-//   char buf[128];
-//   int fd = -1;
-//   int rc = 0;
-//   char *outstr;
+/********************************************************************************************/
+int gpio_set_value(short val, int gpionum)
+{
+  char buf[128];
+  int fd = -1;
+  int rc = 0;
+  char *outstr;
 
-//   snprintf(buf, sizeof(buf), "/sys/class/gpio/gpio%d/value", gpionum);
-//   fd = open(buf, O_WRONLY);
-//   if (fd == -1) {
-//     rc = errno;
-//     return -rc;
-//   }
+  snprintf(buf, sizeof(buf), "/sys/class/gpio/gpio%d/value", gpionum);
+  fd = open(buf, O_WRONLY);
+  if (fd == -1) {
+    rc = errno;
+    return -rc;
+  }
 
-//   if (val != 0) outstr = "1";
-//   else outstr = "0";
+  if (val != 0) outstr = "1";
+  else outstr = "0";
 
-//   write(fd, outstr, strlen(outstr));
+  write(fd, outstr, strlen(outstr));
 
-//   if (fd != -1) {
-//     close(fd);
-//   }
-//   return -rc;
-// }
+  if (fd != -1) {
+    close(fd);
+  }
+  return -rc;
+}
