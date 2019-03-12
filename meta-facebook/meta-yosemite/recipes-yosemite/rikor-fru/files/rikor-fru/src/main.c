@@ -178,7 +178,8 @@ void print_help(void)
 	// printf("   -c --conf_file filename   Read configuration from the file\n");
 	// printf("   -l --log_file  filename   Write logs to the file\n");
 	printf("   -g --get                  Get ip address\n");
-	printf("   -s --set xxx.xxx.xxx.xxx  Store ip address\n");
+	printf("   -s --set ddd.ddd.ddd.ddd  Store ip address\n");
+	printf("   -a --addr xx              FRU address. Between 0x50, 0x57.\n");
 	printf("\n");
 }
 
@@ -192,9 +193,11 @@ int main(int argc, char *argv[])
 	{
 		// {"conf_file", required_argument, 0, 'c'},
 		// {"log_file", required_argument, 0, 'l'},
-		{"help", no_argument, 0, 'h'},
-		{"set", required_argument, 0, 's'},
-		{"get", no_argument, 0, 'g'},
+		{"help",  no_argument,       0, 'h'},
+		{"set",   required_argument, 0, 's'},
+		{"get",   no_argument,       0, 'g'},
+		{"addr",  required_argument, 0, 'a'},
+		{"faddr", required_argument, 0, 'b'},
 		{NULL, 0, 0, 0}
 	};
 
@@ -203,11 +206,12 @@ int main(int argc, char *argv[])
 	char *log_file_name = NULL;
 	char *ip_string = NULL;
 	int func = 0;
+	int at24addr = 0x50;
 
 	app_name = argv[0];
 
 	/* Try to process all command line arguments */
-	while ((value = getopt_long(argc, argv, "c:l:hs:g", long_options, &option_index)) != -1) 
+	while ((value = getopt_long(argc, argv, "c:l:hs:ga:b:", long_options, &option_index)) != -1) 
 	{
 		switch (value) 
 		{
@@ -230,6 +234,33 @@ int main(int argc, char *argv[])
 			case 'g':
 				func = 2;
 				break;
+			case 'a':
+				sscanf(optarg, "%x", &at24addr);
+				if((at24addr < 0x50) || (at24addr > 0x57))
+				{
+					fprintf(stderr, "Wrong AT24C02 address %d\n", at24addr);
+					at24addr = 0x50;
+				}
+				break;
+			case 'b':
+			{
+				FILE *ffaddr = fopen(optarg, "rb");
+				if(ffaddr == NULL)
+				{
+					fprintf(stderr, "Can not open file: %s, error: %s\n",
+						optarg, strerror(errno));
+				}
+				else
+				{
+					fscanf(ffaddr, "%x", &at24addr);
+					if((at24addr < 0x50) || (at24addr > 0x57))
+					{
+						fprintf(stderr, "Wrong AT24C02 address %d\n", at24addr);
+						at24addr = 0x50;
+					}
+				}
+				break;
+			}
 			default:
 				break;
 		}
@@ -254,9 +285,11 @@ int main(int argc, char *argv[])
 
 
 
-
+	char eeprom_path[256];
 	rikor_fru_t data;
 	int rf;
+
+	sprintf(eeprom_path, EEPROM_PATH, at24addr);
 
 	if((rf = fru_buf_init(&data)) == 0)
 	{
@@ -266,12 +299,12 @@ int main(int argc, char *argv[])
 		case 1:
 			// Store IP
 			printf("%08x\n", parse_ip(ip_string));
-			if((rf = read_fru(EEPROM_PATH, &data)) == 0)
+			if((rf = read_fru(eeprom_path, &data)) == 0)
 			{ // Данные успешно прочитаны
 				data.ip1 = parse_ip(ip_string);
 				if(data.ip1 != 0)
 				{
-					if(write_fru(EEPROM_PATH, &data) != 0)
+					if(write_fru(eeprom_path, &data) != 0)
 					{
 						fprintf(stderr, "EEPROM write error\n");
 						retval = 1;
@@ -290,7 +323,7 @@ int main(int argc, char *argv[])
 				data.ip1 = parse_ip(ip_string);
 				if(data.ip1 != 0)
 				{
-					if(write_fru(EEPROM_PATH, &data) != 0)
+					if(write_fru(eeprom_path, &data) != 0)
 					{
 						fprintf(stderr, "EEPROM write error\n");
 						retval = 1;
@@ -306,7 +339,7 @@ int main(int argc, char *argv[])
 			break;
 		case 2:
 			// Get IP
-			rf = read_fru(EEPROM_PATH, &data);
+			rf = read_fru(eeprom_path, &data);
 			if(rf == 0)
 			{
 				printf("%hhu.%hhu.%hhu.%hhu\n", data.ip1 >> 24,
@@ -328,7 +361,7 @@ int main(int argc, char *argv[])
 			break;
 		default:
 			// Get all FRU data
-			rf = read_fru(EEPROM_PATH, &data);
+			rf = read_fru(eeprom_path, &data);
 			if(rf == 0)
 			{
 				printf("FRU id:   0x%08X\n", data.id);

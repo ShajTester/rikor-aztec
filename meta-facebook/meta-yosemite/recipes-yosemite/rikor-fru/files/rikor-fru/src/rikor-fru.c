@@ -89,8 +89,8 @@ int write_fru(const char *device, const rikor_fru_t *const data)
 		int err = errno;
 
 #ifdef DEBUG
-		// syslog(LOG_INFO, "failed to open device %s", EEPROM_PATH);
-		fprintf(stderr, "failed to open device %s\n", EEPROM_PATH);
+		// syslog(LOG_INFO, "failed to open device %s", device);
+		fprintf(stderr, "failed to open device %s\n", device);
 #endif
 		return err;
 	}
