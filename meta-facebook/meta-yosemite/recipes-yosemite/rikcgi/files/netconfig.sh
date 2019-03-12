@@ -1,5 +1,20 @@
 #!/bin/bash
 
+# POST url:netconfig.sh data:
+#     {
+#         "hostname":"",
+#         "dhcp":"no",
+#         "addr":"192.168.0.123",
+#         "mask":"255.255.0.0",
+#         "gateway":"192.168.0.1",
+#         "dns":"",
+#         "ip6_addr":"",
+#         "ip6_com":"add",
+#         "ip6_auto_conf":"on",
+#         "ip6_dhcp":"stateless"
+#     }
+
+
 echo "" > /www/pages/lognet.json
 
 if [ "$REQUEST_METHOD" = "POST" ]; then
@@ -7,11 +22,11 @@ if [ "$REQUEST_METHOD" = "POST" ]; then
         while read -n $CONTENT_LENGTH POST_DATA <&0
         do
             echo "$POST_DATA" >> /www/pages/lognet.json
-         done
+        done
     fi
 fi
 
-read -a Q <<< `cat lognet.json|sed -E 's/[{}\"]//g;s/,/ /g'`
+read -a Q <<< `cat lognet.json | sed -E 's/[{}\"]//g;s/,/ /g'`
 
 HOSTNAME=`echo "${Q[0]}"|cut -d : -f 2`
 DHCP=`echo "${Q[1]}"|cut -d : -f 2`
