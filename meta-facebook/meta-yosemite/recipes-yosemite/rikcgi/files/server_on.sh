@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 echo 1 > /sys/class/gpio/gpio195/value
 sleep 1s

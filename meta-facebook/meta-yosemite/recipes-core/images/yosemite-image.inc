@@ -12,6 +12,7 @@ UBOOT_IMAGE_ENTRYPOINT = "0x40008000"
 IMAGE_INSTALL += " \
   packagegroup-openbmc-base \
   packagegroup-openbmc-net \
+  packagegroup-openbmc-python3y \
   openbmc-utils \
   sensor-setup \
   rikgpio \
@@ -32,6 +33,7 @@ IMAGE_INSTALL += " ledblink-lt "
 IMAGE_INSTALL += " initsc-lt "
 
 
+  
 IMAGE_FEATURES += " \
   "
 
