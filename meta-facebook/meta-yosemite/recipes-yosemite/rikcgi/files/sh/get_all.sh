@@ -6,11 +6,11 @@ FWINFO=$FWINFO" build "$(cat /etc/version)
 HWINFO="Rikor R-BD-ESR-V4-16EA v.5 / BOIS 2.8 / PCIE 3.0 / CPU: 2 x Intel Xeon E5 2630 v3 / RAM:256 GB"
 
 JSON="{"
-JSON=$JSON"\"sysinfo\":{\"fwinfo\":\"$FWINFO\",\"hwinfo\":\"$HWINFO\"},"
-JSON=$JSON"\"voltage\":"`./voltage.sh`","
-JSON=$JSON"\"fantach\":"`./fantach.sh`","
-JSON=$JSON"\"sensors\":"`./sensors.sh`","
-# JSON=$JSON"\"netconfig\":"`./getnetconf.sh`
+JSON=$JSON"\"sysinfo\":{\"fwinfo\":\"$FWINFO\",\"hwinfo\":\"$HWINFO\"}"
+JSON=$JSON",\"voltage\":"`./voltage.sh`
+JSON=$JSON",\"fantach\":"`./fantach.sh`
+JSON=$JSON",\"sensors\":"`./sensors.sh`
+# JSON=$JSON",\"netconfig\":"`./getnetconf.sh`
 JSON=$JSON"}"
 
 echo $JSON

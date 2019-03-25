@@ -12,7 +12,6 @@ UBOOT_IMAGE_ENTRYPOINT = "0x40008000"
 IMAGE_INSTALL += " \
   packagegroup-openbmc-base \
   packagegroup-openbmc-net \
-  packagegroup-openbmc-python3y \
   openbmc-utils \
   sensor-setup \
   rikgpio \
@@ -25,6 +24,10 @@ IMAGE_INSTALL += " \
   dscan \
   "
 #  riknet 
+
+#  packagegroup-openbmc-python3y 
+
+IMAGE_INSTALL += " rikcgi-login"
 
 IMAGE_INSTALL += " watchdog-ctrl"
 
