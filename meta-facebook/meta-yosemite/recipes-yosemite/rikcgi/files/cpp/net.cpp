@@ -125,7 +125,7 @@ bool psw_is_valid(std::string &l, std::string &p)
 }
 
 
-bool key_is_valid(std::string &l, std::string &k)
+bool key_is_valid(std::string &l, std::string &k, bool delete_key = false)
 {
 	bool retval = false;
 	std::string fkey;
@@ -198,39 +198,74 @@ int main(int argc, char const *argv[])
 
 	syslog(LOG_INFO, " ~~~ IN %s", jin.dump().c_str());
 
+	std::string in_cmd;
 	std::string in_key;
 	std::string in_login;
 	std::string in_psw;
 
+	if(jin.count("command") == 1) in_cmd = jin["command"].get<std::string>();
 	if(jin.count("login") == 1) in_login = jin["login"].get<std::string>();
 	if(jin.count("key") == 1) in_key = jin["key"].get<std::string>();
 	if(jin.count("password") == 1) in_psw = jin["password"].get<std::string>();
 
-	if(in_login.length() == 0)
-	{ // Если в запросе не пришло логина, то нам этот запрос точно не интересен
+	if(in_cmd.length() == 0)
+	{
 		print_blanc();
 	}
-	else
-	{ // В запросе есть логин
-		if(in_key.length() != 0)
-		{ // Передан ключ и логин
-			if(key_is_valid(in_login, in_key))
-				print_new_key(in_login);
-			else
-				print_blanc();
-		}
-		else if(in_psw.length() != 0)
-		{ // Передан логин / пароль 
-			if(psw_is_valid(in_login, in_psw))
-				print_new_key(in_login);
-			else
-				print_blanc();
-		}
-		else
-		{ // Логин без ключа или пароля нам не интересен
-			print_blanc();
-		}
+	else if(in_cmd == "relogin")
+	{
+		print_blanc();
 	}
+	else if(in_cmd == "login")
+	{
+		if(psw_is_valid(in_login, in_psw))
+			print_new_key(in_login);
+		else
+			print_blanc();
+	}
+	else if(in_cmd == "logout")
+	{
+		key_is_valid(in_login, in_key, true);
+		print_blanc();
+	}
+	else if(in_cmd == "update")
+	{
+		if(key_is_valid(in_login, in_key))
+			print_new_key(in_login);
+		else
+			print_blanc();
+	}
+	else
+	{
+		print_blanc();
+	}
+
+
+	// if(in_login.length() == 0)
+	// { // Если в запросе не пришло логина, то нам этот запрос точно не интересен
+	// 	print_blanc();
+	// }
+	// else
+	// { // В запросе есть логин
+	// 	if(in_key.length() != 0)
+	// 	{ // Передан ключ и логин
+	// 		if(key_is_valid(in_login, in_key))
+	// 			print_new_key(in_login);
+	// 		else
+	// 			print_blanc();
+	// 	}
+	// 	else if(in_psw.length() != 0)
+	// 	{ // Передан логин / пароль 
+	// 		if(psw_is_valid(in_login, in_psw))
+	// 			print_new_key(in_login);
+	// 		else
+	// 			print_blanc();
+	// 	}
+	// 	else
+	// 	{ // Логин без ключа или пароля нам не интересен
+	// 		print_blanc();
+	// 	}
+	// }
 
 	return 0;
 }

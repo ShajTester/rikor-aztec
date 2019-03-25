@@ -9,12 +9,12 @@ LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=cc4734e8a01f740811ac41130a40cf90"
 
 SRCREV = "${AUTOREV}"
-SRC_URI = "file://login "
+SRC_URI = "file://cpp "
 
 DEPEND = " glibc "
 RDEPEND_${PN} = " glibc "
 
-S = "${WORKDIR}/login"
+S = "${WORKDIR}/cpp"
 
 # export SINC = "${STAGING_INCDIR}"
 # export SLIB = "${STAGING_LIBDIR}"
