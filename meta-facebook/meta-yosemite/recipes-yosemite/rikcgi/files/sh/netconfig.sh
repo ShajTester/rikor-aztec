@@ -1,6 +1,6 @@
 #!/bin/sh
 
-exec /usr/bin/rikcgi-net
+exec /usr/bin/rikcgi-net --store
 
 
 # POST url:netconfig.sh data:

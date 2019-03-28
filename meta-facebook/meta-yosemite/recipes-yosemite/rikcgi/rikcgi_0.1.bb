@@ -48,9 +48,7 @@ do_install() {
   install -m 777 voltage.sh ${dst}
   install -m 777 sensors.sh ${dst}
   install -m 777 get_all.sh ${dst}
-  install -m 777 getnetconf.sh ${dst}
   install -m 777 login.sh ${dst}
-  install -m 777 logout.sh ${dst}
   # ln -snf ${dst}/httpd_test.cgi ${bin}/rikcgi
 }
 

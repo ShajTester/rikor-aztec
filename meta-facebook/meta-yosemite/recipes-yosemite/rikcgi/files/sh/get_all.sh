@@ -10,7 +10,7 @@ JSON=$JSON"\"sysinfo\":{\"fwinfo\":\"$FWINFO\",\"hwinfo\":\"$HWINFO\"}"
 JSON=$JSON",\"voltage\":"`./voltage.sh`
 JSON=$JSON",\"fantach\":"`./fantach.sh`
 JSON=$JSON",\"sensors\":"`./sensors.sh`
-# JSON=$JSON",\"netconfig\":"`./getnetconf.sh`
+JSON=$JSON",\"netconfig\":"`/usr/bin/rikcgi-net --get`
 JSON=$JSON"}"
 
 echo $JSON
