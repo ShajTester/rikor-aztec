@@ -175,11 +175,10 @@ void print_help(void)
 	printf("Usage: %s [OPTIONS]\n\n", app_name);
 	printf("  Options:\n");
 	printf("   -h --help                 Print this help\n");
-	// printf("   -c --conf_file filename   Read configuration from the file\n");
-	// printf("   -l --log_file  filename   Write logs to the file\n");
 	printf("   -g --get                  Get ip address\n");
 	printf("   -s --set ddd.ddd.ddd.ddd  Store ip address\n");
 	printf("   -a --addr xx              FRU address. Between 0x50, 0x57.\n");
+	printf("   -b --faddr path           Path to the file with the FRU address.\n");
 	printf("\n");
 }
 
@@ -191,8 +190,6 @@ int main(int argc, char *argv[])
 
 	static struct option long_options[] = 
 	{
-		// {"conf_file", required_argument, 0, 'c'},
-		// {"log_file", required_argument, 0, 'l'},
 		{"help",  no_argument,       0, 'h'},
 		{"set",   required_argument, 0, 's'},
 		{"get",   no_argument,       0, 'g'},
@@ -203,30 +200,20 @@ int main(int argc, char *argv[])
 
 	int value;
 	int option_index = 0;
-	char *log_file_name = NULL;
 	char *ip_string = NULL;
 	int func = 0;
 	int at24addr = 0x50;
 
 	app_name = argv[0];
 
+    openlog("rikor-fru", LOG_CONS, LOG_USER);
+
+
 	/* Try to process all command line arguments */
-	while ((value = getopt_long(argc, argv, "c:l:hs:ga:b:", long_options, &option_index)) != -1) 
+	while ((value = getopt_long(argc, argv, "hs:ga:b:", long_options, &option_index)) != -1) 
 	{
 		switch (value) 
 		{
-			case 'c':
-				conf_file_name = strdup(optarg);
-				break;
-			case 'l':
-				log_file_name = strdup(optarg);
-				break;
-			case 'h':
-				print_help();
-				return EXIT_SUCCESS;
-			case '?':
-				print_help();
-				return EXIT_FAILURE;
 			case 's':
 				ip_string = strdup(optarg);
 				func = 1;
@@ -261,27 +248,18 @@ int main(int argc, char *argv[])
 				}
 				break;
 			}
+			case '0':
+			case '1':
+				fprintf(stderr, "NUMBER %s: option '-%c' is invalid: ignored\n", argv[0], optopt);
+				break;
+			case 'h':
+			case '?':
+			case ':':
 			default:
+				fprintf(stderr, "%s: option '-%c' is invalid: ignored\n", argv[0], optopt);
 				break;
 		}
 	}
-
-	/* Try to open log file */
-	if (log_file_name != NULL) 
-	{
-		log_stream = fopen(log_file_name, "a+");
-		if (log_stream == NULL) 
-		{
-			fprintf(stderr, "Can not open log file: %s, error: %s\n",
-				log_file_name, strerror(errno));
-			log_stream = stdout;
-		}
-	} 
-	else 
-	{
-		log_stream = stdout;
-	}
-
 
 
 
@@ -362,17 +340,7 @@ int main(int argc, char *argv[])
 		default:
 			// Get all FRU data
 			rf = read_fru(eeprom_path, &data);
-			if(rf == 0)
-			{
-				printf("FRU id:   0x%08X\n", data.id);
-				printf("Board id: 0x%016llX\n", data.board_id);
-				printf("ip:       %hhu.%hhu.%hhu.%hhu\n", data.ip1 >> 24,
-					(data.ip1 >> 16) & 0xff,
-					(data.ip1 >> 8) & 0xff,
-					data.ip1 & 0xff);
-				retval = 0;
-			}				
-			else if(rf == ERRCRC)
+			if(rf == ERRCRC)
 			{
 				fprintf(stderr, "EEPROM CRC error\n");
 				retval = 1;
@@ -382,6 +350,13 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "EEPROM read error %d\n", rf);
 				retval = 1;
 			}
+			printf("FRU id:   0x%08X\n", data.id);
+			printf("Board id: 0x%016llX\n", data.board_id);
+			printf("ip:       %hhu.%hhu.%hhu.%hhu\n", data.ip1 >> 24,
+				(data.ip1 >> 16) & 0xff,
+				(data.ip1 >> 8) & 0xff,
+				data.ip1 & 0xff);
+			retval = 0;
 			break;
 		}
 	}
@@ -395,15 +370,13 @@ int main(int argc, char *argv[])
 
 
 	/* Close log file, when it is used. */
-	if (log_stream != stdout) {
-		fclose(log_stream);
-	}
+	// if (log_stream != stdout) {
+	// 	fclose(log_stream);
+	// }
 
 	/* Free allocated memory */
 
 	/* Free allocated memory */
-	if (conf_file_name != NULL) free(conf_file_name);
-	if (log_file_name != NULL) free(log_file_name);
 
 	return retval;
 }

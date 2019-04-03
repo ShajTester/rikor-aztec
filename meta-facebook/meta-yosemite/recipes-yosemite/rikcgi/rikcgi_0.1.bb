@@ -56,5 +56,5 @@ FBPACKAGEDIR = "/www/pages"
 
 FILES_${PN} = "${FBPACKAGEDIR} /www/bin"
 
-RDEPEND_${PN} += " bash "
+RDEPENDS_${PN} += "bash"
 

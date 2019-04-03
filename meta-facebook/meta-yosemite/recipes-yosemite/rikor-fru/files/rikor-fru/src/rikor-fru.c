@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#include <syslog.h>
 
 #include "crc16.h"
 #include "rikor-fru.h"
@@ -13,6 +14,20 @@
 #define DEBUG
 #endif
 
+
+// Отсюда
+// https://github.com/KyleBanks/XOREncryption/blob/master/C%2B%2B/main.cpp
+// https://toster.ru/q/489264
+static char key[] = {'K', 'C', 'Q'}; //Any chars will work, in an array of any size
+
+void encryptDecrypt(char *toEncrypt, int len)
+{
+    for (int i = 0; i < len; i++)
+        toEncrypt[i] = toEncrypt[i] ^ key[i % (sizeof(key) / sizeof(char))];
+}
+
+
+
 int fru_buf_init(rikor_fru_t *const data)
 {
 	data->id = 0xaa5555aa;
@@ -21,6 +36,32 @@ int fru_buf_init(rikor_fru_t *const data)
 	return EXIT_SUCCESS;
 }
 
+
+int get_fru_device(char *path)
+{
+	int retval = 0;
+	int at24addr = DEFAT24ADDR;
+
+	FILE *ffaddr = fopen("/tmp/rikor-fru-address", "rb");
+	if(ffaddr == NULL)
+	{
+		syslog(LOG_ERR, "Can not open file: %s, error: %s\n", "/tmp/rikor-fru-address", strerror(errno));
+		retval = 1;
+	}
+	else
+	{
+		fscanf(ffaddr, "%x", &at24addr);
+		if((at24addr < 0x50) || (at24addr > 0x57))
+		{
+			syslog(LOG_ERR, "Wrong AT24C02 address %d\n", at24addr);
+			at24addr = 0x50;
+			retval = 2;
+		}
+	}
+
+	sprintf(path, EEPROM_PATH, at24addr);
+	return retval;
+}
 
 
 int read_fru(const char *device, rikor_fru_t *const data)
@@ -35,11 +76,7 @@ int read_fru(const char *device, rikor_fru_t *const data)
 	if (!fp)
 	{
 		int err = errno;
-
-#ifdef DEBUG
-		// syslog(LOG_INFO, "failed to open device %s", device);
-		fprintf(stderr, "failed to open device %s\n", device);
-#endif
+		syslog(LOG_ERR, "failed to open device %s", device);
 		return err;
 	}
 
@@ -49,10 +86,7 @@ int read_fru(const char *device, rikor_fru_t *const data)
 
 	if (rc != 2)
 	{
-#ifdef DEBUG
-		// syslog(LOG_INFO, "failed to read device %s", device);
-		fprintf(stderr, "failed to read device %s\n", device);
-#endif
+		syslog(LOG_ERR, "failed to read device %s", device);
 		return ENOENT;
 	} 
 	else
@@ -60,10 +94,7 @@ int read_fru(const char *device, rikor_fru_t *const data)
 		crc = crc16(0, (const u8 *)data, sizeof(rikor_fru_t));
 		if(fcrc != crc)
 		{ // Ошибка CRC
-#ifdef DEBUG
-			// syslog(LOG_INFO, "failed to read device %s", device);
-			fprintf(stderr, "CRC error in device %s\n", device);
-#endif
+			syslog(LOG_ERR, "CRC error in device %s", device);
 			return ERRCRC;
 		}
 		return 0;
@@ -88,10 +119,7 @@ int write_fru(const char *device, const rikor_fru_t *const data)
 	{
 		int err = errno;
 
-#ifdef DEBUG
-		// syslog(LOG_INFO, "failed to open device %s", device);
-		fprintf(stderr, "failed to open device %s\n", device);
-#endif
+		syslog(LOG_ERR, "failed to open device %s", device);
 		return err;
 	}
 

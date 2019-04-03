@@ -24,6 +24,13 @@ set_target_properties(${PROJECT_NAME}-net PROPERTIES
   COMPILE_OPTIONS -Wpedantic -Wall -Wextra
 )
 
+target_link_libraries(${PROJECT_NAME}-net
+	rikor-fru
+)
+
+
+# add_library (rikor-fru SHARED IMPORTED)
+
 
 install (TARGETS ${PROJECT_NAME}-login RUNTIME DESTINATION bin)
 install (TARGETS ${PROJECT_NAME}-net RUNTIME DESTINATION bin)
