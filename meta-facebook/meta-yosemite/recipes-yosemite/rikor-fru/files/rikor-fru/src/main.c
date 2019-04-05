@@ -32,6 +32,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #include <stdarg.h>
 #include <limits.h>
@@ -157,13 +158,14 @@ int read_conf_file(int reload)
 }
 
 
-int parse_ip(const char *str)
+unsigned int parse_ip(const char *str)
 {
 	unsigned char b[4];
 	// fprintf(stderr, "\"%s\"\n", str);
 	int ret = sscanf(str, "%hhu.%hhu.%hhu.%hhu", b+3, b+2, b+1, b);
 	if(ret != 4) return 0;
 	return (b[3] << 24) | (b[2] << 16) | (b[1] << 8) | b[0];
+	// return 0;
 }
 
 
@@ -175,12 +177,239 @@ void print_help(void)
 	printf("Usage: %s [OPTIONS]\n\n", app_name);
 	printf("  Options:\n");
 	printf("   -h --help                 Print this help\n");
-	printf("   -g --get                  Get ip address\n");
-	printf("   -s --set ddd.ddd.ddd.ddd  Store ip address\n");
+	printf("   -g --get='<param list>'   Get data\n");
+	printf("   -s --set='<param list>'   Store data\n");
 	printf("   -a --addr xx              FRU address. Between 0x50, 0x57.\n");
 	printf("   -b --faddr path           Path to the file with the FRU address.\n");
 	printf("\n");
 }
+
+
+void printf_ip(unsigned int ip)
+{
+	printf("%hhu.%hhu.%hhu.%hhu", ip >> 24,
+		(ip >> 16) & 0xff,
+		(ip >> 8) & 0xff,
+		ip & 0xff);
+
+}
+
+
+void print_param(const char *start, const char *end, const rikor_fru_t *data)
+{
+	if(strncmp(start, "dhcp1", (end - start)) == 0)
+	{
+		if(data->dhcp1 == 1) printf("dhcp");
+		else printf("static");
+	}
+	else if(strncmp(start, "ip1", (end - start)) == 0)
+	{
+		printf_ip(data->ip1);
+	}
+	else if(strncmp(start, "netmask1", (end - start)) == 0)
+	{
+		printf_ip(data->netmask1);
+	}
+	else if(strncmp(start, "gate1", (end - start)) == 0)
+	{
+		printf_ip(data->gate1);
+	}
+	else if(strncmp(start, "dhcp2", (end - start)) == 0)
+	{
+		if(data->dhcp2 == 1) printf("dhcp");
+		else printf("static");
+	}
+	else if(strncmp(start, "ip2", (end - start)) == 0)
+	{
+		printf_ip(data->ip2);
+	}
+	else if(strncmp(start, "netmask2", (end - start)) == 0)
+	{
+		printf_ip(data->netmask2);
+	}
+	else if(strncmp(start, "gate2", (end - start)) == 0)
+	{
+		printf_ip(data->gate2);
+	}
+	else if(strncmp(start, "hostname", (end - start)) == 0)
+	{
+		printf("%s", data->hostname);
+	}
+	else
+	{
+		for(const char *i=start; i<end; i++)
+			putchar(*i);
+		putchar('\n');
+	}
+}
+
+
+void print_list(const char *line, const rikor_fru_t *data)
+{
+	const char *c = line;
+	const char *start = line;
+	for(; *c != 0; c++)
+	{
+		if(*c == ' ')
+		{
+			print_param(start, c, data);
+			putchar(' ');
+			start = c + 1;
+		}
+	}
+	if(start != c) print_param(start, c, data);
+}
+
+
+int read_param(const char *start, const char *mid, char *end, rikor_fru_t *data)
+{
+	int retval = 0;
+	unsigned int ip;
+	char tc;
+
+	syslog(LOG_INFO, " ~ %p  %p  %p", start, mid, end);
+
+	if(strncmp(start, "dhcp1", (mid - start - 1)) == 0)
+	{
+		if(strncmp(mid, "yes", (end - mid)) == 0) data->dhcp1 = 1;
+		else if(strncmp(mid, "no", (end - mid)) == 0) data->dhcp1 = 0;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param dhcp1 data error");
+		}
+	}
+	else if(strncmp(start, "ip1", (mid - start - 1)) == 0)
+	{
+		tc = *end;
+		*end = 0;
+		ip = parse_ip(mid);
+		*end = tc;
+		if(ip != 0) data->ip1 = ip;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param ip1 data error");
+		}
+	}
+	else if(strncmp(start, "netmask1", (mid - start - 1)) == 0)
+	{
+		tc = *end;
+		*end = 0;
+		ip = parse_ip(mid);
+		*end = tc;
+		if(ip != 0) data->netmask1 = ip;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param netmask1 data error");
+		}
+	}
+	else if(strncmp(start, "gate1", (mid - start - 1)) == 0)
+	{
+		tc = *end;
+		*end = 0;
+		ip = parse_ip(mid);
+		*end = tc;
+		if(ip != 0) data->gate1 = ip;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param gate1 data error");
+		}
+	}
+	else if(strncmp(start, "dhcp2", (mid - start - 1)) == 0)
+	{
+		if(strncmp(mid, "yes", (end - mid)) == 0) data->dhcp2 = 1;
+		else if(strncmp(mid, "no", (end - mid)) == 0) data->dhcp2 = 0;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param dhcp2 data error");
+		}
+	}
+	else if(strncmp(start, "ip2", (mid - start - 1)) == 0)
+	{
+		tc = *end;
+		*end = 0;
+		ip = parse_ip(mid);
+		*end = tc;
+		if(ip != 0) data->ip2 = ip;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param ip2 data error");
+		}
+	}
+	else if(strncmp(start, "netmask2", (mid - start - 1)) == 0)
+	{
+		tc = *end;
+		*end = 0;
+		ip = parse_ip(mid);
+		*end = tc;
+		if(ip != 0) data->netmask2 = ip;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param netmask2 data error");
+		}
+	}
+	else if(strncmp(start, "gate2", (mid - start - 1)) == 0)
+	{
+		tc = *end;
+		*end = 0;
+		ip = parse_ip(mid);
+		*end = tc;
+		if(ip != 0) data->gate2 = ip;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param gate2 data error");
+		}
+	}
+	else if(strncmp(start, "hostname", (mid - start - 1)) == 0)
+	{
+		strncpy(data->hostname, mid, end - mid);
+		*(data->hostname + (end - mid)) = 0;
+	}
+	else
+	{
+		for(const char *i=start; i<end; i++)
+			putchar(*i);
+		putchar('\n');
+		retval++;
+	}
+
+	return 1;
+}
+
+
+int read_list(char *line, rikor_fru_t *data)
+{
+	char *c = line;
+	const char *start = line;
+	const char *mid = line;
+	int retval = 0;
+
+	for(; *c != 0; c++)
+	{
+		if(*c == ' ')
+		{
+			if(mid <= start)
+			{
+				mid = c + 1;
+			}
+			else
+			{
+				retval += read_param(start, mid, c, data);
+				start = c + 1;
+			}
+		}
+	}
+	if((start < mid) && (mid < c)) read_param(start, mid, c, data);
+	return retval;
+}
+
 
 /* Main function */
 int main(int argc, char *argv[])
@@ -192,15 +421,17 @@ int main(int argc, char *argv[])
 	{
 		{"help",  no_argument,       0, 'h'},
 		{"set",   required_argument, 0, 's'},
-		{"get",   no_argument,       0, 'g'},
+		{"get",   optional_argument, 0, 'g'},
 		{"addr",  required_argument, 0, 'a'},
 		{"faddr", required_argument, 0, 'b'},
+		{"initdata", no_argument,    0, 'z'},
 		{NULL, 0, 0, 0}
 	};
 
 	int value;
 	int option_index = 0;
 	char *ip_string = NULL;
+	char *get_string = NULL;
 	int func = 0;
 	int at24addr = 0x50;
 
@@ -210,22 +441,26 @@ int main(int argc, char *argv[])
 
 
 	/* Try to process all command line arguments */
-	while ((value = getopt_long(argc, argv, "hs:ga:b:", long_options, &option_index)) != -1) 
+	while ((value = getopt_long(argc, argv, "hs:g::a:b:", long_options, &option_index)) != -1) 
 	{
 		switch (value) 
 		{
 			case 's':
-				ip_string = strdup(optarg);
 				func = 1;
+				get_string = strdup(optarg);
 				break;
 			case 'g':
 				func = 2;
+				if(optarg != NULL)
+				{
+					get_string = strdup(optarg);
+				}
 				break;
 			case 'a':
 				sscanf(optarg, "%x", &at24addr);
 				if((at24addr < 0x50) || (at24addr > 0x57))
 				{
-					fprintf(stderr, "Wrong AT24C02 address %d\n", at24addr);
+					syslog(LOG_ERR, "Wrong AT24C02 address %d\n", at24addr);
 					at24addr = 0x50;
 				}
 				break;
@@ -234,7 +469,7 @@ int main(int argc, char *argv[])
 				FILE *ffaddr = fopen(optarg, "rb");
 				if(ffaddr == NULL)
 				{
-					fprintf(stderr, "Can not open file: %s, error: %s\n",
+					syslog(LOG_ERR, "Can not open file: %s, error: %s\n",
 						optarg, strerror(errno));
 				}
 				else
@@ -242,21 +477,26 @@ int main(int argc, char *argv[])
 					fscanf(ffaddr, "%x", &at24addr);
 					if((at24addr < 0x50) || (at24addr > 0x57))
 					{
-						fprintf(stderr, "Wrong AT24C02 address %d\n", at24addr);
+						syslog(LOG_ERR, "Wrong AT24C02 address %d\n", at24addr);
 						at24addr = 0x50;
 					}
 				}
 				break;
 			}
+			case 'z':
+				func = 3;
+				break;
 			case '0':
 			case '1':
-				fprintf(stderr, "NUMBER %s: option '-%c' is invalid: ignored\n", argv[0], optopt);
+				syslog(LOG_ERR, "NUMBER %s: option '-%c' is invalid: ignored\n", argv[0], optopt);
 				break;
 			case 'h':
 			case '?':
+				print_help();
+				break;
 			case ':':
 			default:
-				fprintf(stderr, "%s: option '-%c' is invalid: ignored\n", argv[0], optopt);
+				syslog(LOG_ERR, "%s: option '-%c' is invalid: ignored\n", argv[0], optopt);
 				break;
 		}
 	}
@@ -275,65 +515,71 @@ int main(int argc, char *argv[])
 		switch(func)
 		{
 		case 1:
-			// Store IP
-			printf("%08x\n", parse_ip(ip_string));
-			if((rf = read_fru(eeprom_path, &data)) == 0)
-			{ // Данные успешно прочитаны
-				data.ip1 = parse_ip(ip_string);
-				if(data.ip1 != 0)
-				{
-					if(write_fru(eeprom_path, &data) != 0)
-					{
-						fprintf(stderr, "EEPROM write error\n");
-						retval = 1;
-					}
-				}
-				else
-				{
-					fprintf(stderr, "Error in ip string: \"%s\"\n", ip_string);
-					retval = 3;
-				}
-			}
-			else if(rf == ERRCRC)
+			// Store data
+			rf = read_fru(eeprom_path, &data);
+			if(rf == ERRCRC)
 			{ // Из EEPROM прочитаны неправильные данные
-				fprintf(stderr, "EEPROM CRC error\n");
+				syslog(LOG_ERR, "EEPROM CRC error");
 				fru_buf_init(&data);
-				data.ip1 = parse_ip(ip_string);
-				if(data.ip1 != 0)
-				{
-					if(write_fru(eeprom_path, &data) != 0)
-					{
-						fprintf(stderr, "EEPROM write error\n");
-						retval = 1;
-					}
-				}
-				else
-				{
-					fprintf(stderr, "Error in ip string: \"%s\"\n", ip_string);
-					retval = 3;
-				}
+				retval = 1;
+			}
+			else if(rf != 0)
+			{ // Данные успешно прочитаны
+				syslog(LOG_ERR, "EEPROM read error %d", rf);
+				retval = 1;
+				// Если eeprom прочитать не смогли, то записать точно не сможем
+				break;
+			}
+
+			rf = read_list(get_string, &data);
+			if(write_fru(eeprom_path, &data) != 0)
+			{
+				syslog(LOG_ERR, "EEPROM write error");
 				retval = 1;
 			}
 			break;
 		case 2:
 			// Get IP
 			rf = read_fru(eeprom_path, &data);
-			if(rf == 0)
+			if(rf == ERRCRC)
 			{
-				printf("%hhu.%hhu.%hhu.%hhu\n", data.ip1 >> 24,
-					(data.ip1 >> 16) & 0xff,
-					(data.ip1 >> 8) & 0xff,
-					data.ip1 & 0xff);
-				retval = 0;
-			}	
-			else if(rf == ERRCRC)
-			{
-				fprintf(stderr, "EEPROM CRC error\n");
+				syslog(LOG_ERR, "EEPROM CRC error");
+				fru_buf_init(&data);
 				retval = 1;
+			}
+			else if(rf != 0)
+			{
+				syslog(LOG_ERR, "EEPROM read error %d", rf);
+				fru_buf_init(&data);
+				retval = 1;
+			}
+
+			if(get_string == NULL)
+			{
+				print_list("dhcp1 ip1 netmask1 gate1 dhcp2 ip2 netmask2 gate2 hostname", &data);
+				printf("\n");
 			}
 			else
 			{
-				fprintf(stderr, "EEPROM read error %d\n", rf);
+				print_list(get_string, &data);
+				printf("\n");
+			}
+			break;
+		case 3:
+			// Инициализация eeprom данными по умолчанию
+			rf = read_fru(eeprom_path, &data);
+			if(rf == ERRCRC)
+			{
+				rf = fru_buf_init(&data);
+				if(write_fru(eeprom_path, &data) != 0)
+				{
+					syslog(LOG_ERR, "EEPROM write error");
+					retval = 1;
+				}
+			}
+			else
+			{
+				syslog(LOG_ERR, "The correct data has already been written to the EEPROM.");
 				retval = 1;
 			}
 			break;
@@ -342,27 +588,60 @@ int main(int argc, char *argv[])
 			rf = read_fru(eeprom_path, &data);
 			if(rf == ERRCRC)
 			{
-				fprintf(stderr, "EEPROM CRC error\n");
+				syslog(LOG_ERR, "EEPROM CRC error\n");
+				fru_buf_init(&data);
 				retval = 1;
 			}
-			else
+			else if(rf != 0)
 			{
-				fprintf(stderr, "EEPROM read error %d\n", rf);
+				syslog(LOG_ERR, "EEPROM read error %d\n", rf);
+				fru_buf_init(&data);
 				retval = 1;
 			}
+
 			printf("FRU id:   0x%08X\n", data.id);
-			printf("Board id: 0x%016llX\n", data.board_id);
-			printf("ip:       %hhu.%hhu.%hhu.%hhu\n", data.ip1 >> 24,
+			printf("Board id: 0x%016llX\n\n", data.board_id);
+			if(data.dhcp1 == 1) printf("if1 DINAMIC\n");
+			else printf("if1 STATIC\n");
+			printf("ip1:       %hhu.%hhu.%hhu.%hhu\n", data.ip1 >> 24,
 				(data.ip1 >> 16) & 0xff,
 				(data.ip1 >> 8) & 0xff,
 				data.ip1 & 0xff);
+			printf("netmask1:  %hhu.%hhu.%hhu.%hhu\n", data.netmask1 >> 24,
+				(data.netmask1 >> 16) & 0xff,
+				(data.netmask1 >> 8) & 0xff,
+				data.netmask1 & 0xff);
+			printf("gate1:  %hhu.%hhu.%hhu.%hhu\n\n", data.gate1 >> 24,
+				(data.gate1 >> 16) & 0xff,
+				(data.gate1 >> 8) & 0xff,
+				data.gate1 & 0xff);
+			if(data.dhcp2 == 1) printf("if2 DINAMIC\n");
+			else printf("if2 STATIC\n");
+			printf("ip2:       %hhu.%hhu.%hhu.%hhu\n", data.ip2 >> 24,
+				(data.ip2 >> 16) & 0xff,
+				(data.ip2 >> 8) & 0xff,
+				data.ip2 & 0xff);
+			printf("netmask2:  %hhu.%hhu.%hhu.%hhu\n", data.netmask2 >> 24,
+				(data.netmask2 >> 16) & 0xff,
+				(data.netmask2 >> 8) & 0xff,
+				data.netmask2 & 0xff);
+			printf("gate2:  %hhu.%hhu.%hhu.%hhu\n\n", data.gate2 >> 24,
+				(data.gate2 >> 16) & 0xff,
+				(data.gate2 >> 8) & 0xff,
+				data.gate2 & 0xff);
+
+			printf("Hostname: <%s>\n", data.hostname);
+			data.psw1[data.psw1size] = 0;
+			printf("psw1:     <%s>\n", data.psw1);
+			data.psw2[data.psw2size] = 0;
+			printf("psw2:     <%s>\n", data.psw2);
 			retval = 0;
 			break;
 		}
 	}
 	else
 	{
-		fprintf(stderr, "error in fru_buf_init()\n");
+		syslog(LOG_ERR, "error in fru_buf_init()\n");
 		retval = 2;
 	}
 
@@ -375,6 +654,8 @@ int main(int argc, char *argv[])
 	// }
 
 	/* Free allocated memory */
+	if(ip_string != NULL) free(ip_string);
+	if(get_string != NULL) free(get_string);
 
 	/* Free allocated memory */
 

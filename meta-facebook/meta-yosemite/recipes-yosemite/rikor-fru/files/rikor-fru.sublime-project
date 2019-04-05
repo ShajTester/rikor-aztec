@@ -3,9 +3,6 @@
 	[
 		{
 			"path": "/home/shaj/wrk/bmc/kapmaster/rikor-aztec/meta-facebook/meta-yosemite/recipes-yosemite/rikor-fru"
-		},
-		{
-			"path": "/home/shaj/wrk/bmc/kapmaster/rikor-aztec/common/recipes-utils/cpldupdate"
 		}
 	]
 }

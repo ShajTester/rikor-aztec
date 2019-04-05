@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <errno.h>
 #include <syslog.h>
@@ -10,9 +11,9 @@
 #include "rikor-fru.h"
 
 
-#ifndef DEBUG
-#define DEBUG
-#endif
+// #ifndef DEBUG
+// #define DEBUG
+// #endif
 
 
 // Отсюда
@@ -32,7 +33,27 @@ int fru_buf_init(rikor_fru_t *const data)
 {
 	data->id = 0xaa5555aa;
 	data->board_id = 0x1234567890abcdefL;
+	data->dhcp1 = 1;
 	data->ip1 = (192<<24) | (168<<16) | (0<<8) | (220);
+	data->netmask1 = (255<<24) | (255<<16) | (255<<8) | (0);
+	data->gate1 = (192<<24) | (168<<16) | (0<<8) | (1);
+	data->dhcp2 = 1;
+	data->ip2 = (10<<24) | (10<<16) | (0<<8) | (222);
+	data->netmask2 = (255<<24) | (255<<16) | (255<<8) | (0);
+	data->gate2 = (10<<24) | (10<<16) | (0<<8) | (1);
+
+	strcpy(data->hostname, "bmc-oob");
+
+	memset(data->psw1, 0, sizeof(data->psw1));
+	data->psw1size = 4;
+	strcpy(data->psw1, "1234");
+	encryptDecrypt(data->psw1, data->psw1size);
+
+	memset(data->psw2, 0, sizeof(data->psw2));
+	data->psw2size = 6;
+	strcpy(data->psw2, "qwerty");
+	encryptDecrypt(data->psw2, data->psw2size);
+
 	return EXIT_SUCCESS;
 }
 
@@ -129,5 +150,29 @@ int write_fru(const char *device, const rikor_fru_t *const data)
 	fclose(fp);
 
 	return 0;
+}
+
+
+
+bool check_psw(rikor_fru_psw_t psw, const char *str, const rikor_fru_t *const data)
+{
+	int sz;
+	char dpsw[17];
+	if(psw == rikor_fru_psw1)
+	{
+		sz = data->psw1size;
+		strncpy(dpsw, data->psw1, sz);
+	}
+	else if(psw == rikor_fru_psw2)
+	{
+		sz = data->psw2size;
+		strncpy(dpsw, data->psw2, sz);
+	}
+	else return false;
+
+	encryptDecrypt(dpsw, sz);
+	if(strcmp(dpsw, str) == 0) return true;
+
+	return false;
 }
 

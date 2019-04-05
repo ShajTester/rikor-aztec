@@ -23,6 +23,8 @@ PR = "r1"
 LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://Makefile;md5=dab47dd8221aba77db5cbfd76dbff5eb"
 
+DEPENDS += "bash"
+
 SRC_URI = "file://sh "
 
 S = "${WORKDIR}/sh"
