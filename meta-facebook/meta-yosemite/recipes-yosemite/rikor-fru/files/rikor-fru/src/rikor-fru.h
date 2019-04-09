@@ -5,6 +5,7 @@
 
 #include <stdbool.h>
 #include <linux/types.h>
+#include <arpa/inet.h>
 
 #define DEFAT24ADDR 0x50
 #define EEPROM_PATH "/sys/devices/platform/ast-i2c.3/i2c-3/3-00%02X/eeprom"
@@ -30,12 +31,14 @@ typedef struct
 		};
 		unsigned int netflags;
 	};
-	unsigned int ip1;
-	unsigned int netmask1;
-	unsigned int gate1;
-	unsigned int ip2;
-	unsigned int netmask2;
-	unsigned int gate2;
+	struct in_addr ip1;
+	struct in_addr netmask1;
+	struct in_addr gate1;
+	struct in_addr dns1_1;
+	struct in_addr ip2;
+	struct in_addr netmask2;
+	struct in_addr gate2;
+	struct in_addr dns1_2;
 	char hostname[18];
 	unsigned char psw1size;
 	char psw1[17];
@@ -58,5 +61,6 @@ int read_fru(const char *device, rikor_fru_t *const data);
 int write_fru(const char *device, const rikor_fru_t *const data);
 
 bool check_psw(rikor_fru_psw_t psw, const char *str, const rikor_fru_t *const data);
+bool set_psw(rikor_fru_psw_t psw, const char *oldPsw, const char *newPsw, const rikor_fru_t *const data);
 
 #endif // RIKOR_FRU_H

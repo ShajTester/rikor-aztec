@@ -34,15 +34,15 @@ int fru_buf_init(rikor_fru_t *const data)
 	data->id = 0xaa5555aa;
 	data->board_id = 0x1234567890abcdefL;
 	data->dhcp1 = 1;
-	data->ip1 = (192<<24) | (168<<16) | (0<<8) | (220);
-	data->netmask1 = (255<<24) | (255<<16) | (255<<8) | (0);
-	data->gate1 = (192<<24) | (168<<16) | (0<<8) | (1);
+	inet_aton("192.168.0.220", &data->ip1);
+	inet_aton("255.255.255.0", &data->netmask1);
+	inet_aton("192.168.0.1", &data->gate1);
 	data->dhcp2 = 1;
-	data->ip2 = (10<<24) | (10<<16) | (0<<8) | (222);
-	data->netmask2 = (255<<24) | (255<<16) | (255<<8) | (0);
-	data->gate2 = (10<<24) | (10<<16) | (0<<8) | (1);
+	inet_aton("10.10.0.220", &data->ip2);
+	inet_aton("255.255.255.0", &data->netmask2);
+	inet_aton("10.10.0.1", &data->gate2);
 
-	strcpy(data->hostname, "bmc-oob");
+	strcpy(data->hostname, "bmc-rikor");
 
 	memset(data->psw1, 0, sizeof(data->psw1));
 	data->psw1size = 4;
@@ -175,4 +175,11 @@ bool check_psw(rikor_fru_psw_t psw, const char *str, const rikor_fru_t *const da
 
 	return false;
 }
+
+
+bool set_psw(rikor_fru_psw_t psw, const char *oldPsw, const char *newPsw, const rikor_fru_t *const data)
+{
+	return false;
+}
+
 

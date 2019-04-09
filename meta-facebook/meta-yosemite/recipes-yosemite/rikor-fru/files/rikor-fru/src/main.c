@@ -36,9 +36,10 @@
 
 #include <stdarg.h>
 #include <limits.h>
-#include "iniparser.h"
-#include "main.h"
+
 #include "rikor-fru.h"
+
+#include <arpa/inet.h>
 
 
 static char *conf_file_name = NULL;
@@ -53,119 +54,9 @@ FILE *text_result;
 
 
 
-/*-------------------------------------------------------------------------*/
-/**
-  @brief    Error callback for iniparser: wraps `fprintf(log_stream, ...)`.
- */
-/*--------------------------------------------------------------------------*/
-static int iniparser_error_callback(const char *format, ...)
+in_addr_t parse_ip(const char *str)
 {
-  int ret;
-  va_list argptr;
-  va_start(argptr, format);
-  ret = vfprintf(log_stream, format, argptr);
-  va_end(argptr);
-  return ret;
-}
-
-
-
-/**
- * \brief Read configuration from config file
- */
-int read_conf_file(int reload)
-{
- //    dictionary *ini;
- //    int ret;
- //    char param_str[20];
- //    const char *name_str;
- //    char cwd[PATH_MAX];
-
-	// if (conf_file_name == NULL) return 0;
-
- //    iniparser_set_error_callback(iniparser_error_callback);
-
- //    ini = iniparser_load(conf_file_name);
-
-	// if (ini == NULL) 
-	// {
-	// 	syslog(LOG_ERR, "Can not open config file: %s, error: %s",
-	// 			conf_file_name, strerror(errno));
-	// 	return -1;
-	// }
-
-	// delay = iniparser_getint(ini, "main:update_delay", 10);
-	// ret = iniparser_getint(ini, "main:output_format", -1);
-
-	// name_str = iniparser_getstring(ini, "main:output_file", "/tmp/out.txt");
-	// if(daemon_cfg.datafilepath != NULL) free(daemon_cfg.datafilepath);
-	// daemon_cfg.datafilepath = malloc(strlen(name_str) + 1);
-	// strcpy(daemon_cfg.datafilepath, name_str);
-
-	// name_str = iniparser_getstring(ini, "main:test_path", "");
-	// if(daemon_cfg.basepath != NULL) free(daemon_cfg.basepath);
-	// if(strlen(name_str) == 0)
-	// {
-	// 	daemon_cfg.basepath = malloc(48);
-	// 	strcpy(daemon_cfg.basepath, "/sys/devices/platform/ast_adc.0");
-	// }
-	// else
-	// {
-	// 	getcwd(cwd, sizeof(cwd));
-	// 	strcat(cwd, "/");
-	// 	strcat(cwd, name_str);
-	// 	daemon_cfg.basepath = malloc(strlen(cwd) + 1);
-	// 	strcpy(daemon_cfg.basepath, cwd);
-	// }
-
-	// for(int i=0; i<16; i++)
-	// {
-	// 	sprintf(param_str, "adc%d:name", i);
-	// 	name_str = iniparser_getstring(ini, param_str, "-");
-	// 	if(adcchndata[i].name != NULL) free(adcchndata[i].name);
-	// 	adcchndata[i].name = malloc(strlen(name_str) + 1);
-	// 	strcpy(adcchndata[i].name, name_str);
-
-	// 	sprintf(param_str, "adc%d:r1", i);
-	// 	adcchndata[i].r1 = iniparser_getint(ini, param_str, 0);
-	// 	sprintf(param_str, "adc%d:r2", i);
-	// 	adcchndata[i].r2 = iniparser_getint(ini, param_str, 1);
-	// 	sprintf(param_str, "adc%d:v2", i);
-	// 	adcchndata[i].v2 = iniparser_getint(ini, param_str, 0);
-	// }
-
-	// if (ret > 0)
-	// {
-	//     iniparser_dump(ini, log_stream);
-
-	// 	if (reload == 1) 
-	// 	{
-	// 		syslog(LOG_INFO, "Reloaded configuration file %s of %s",
-	// 			conf_file_name,
-	// 			app_name);
-	// 	} 
-	// 	else 
-	// 	{
-	// 		syslog(LOG_INFO, "Configuration of %s read from file %s",
-	// 			app_name,
-	// 			conf_file_name);
-	// 	}
-	// }
-
- //    iniparser_freedict(ini);
-
-	return 0;
-}
-
-
-unsigned int parse_ip(const char *str)
-{
-	unsigned char b[4];
-	// fprintf(stderr, "\"%s\"\n", str);
-	int ret = sscanf(str, "%hhu.%hhu.%hhu.%hhu", b+3, b+2, b+1, b);
-	if(ret != 4) return 0;
-	return (b[3] << 24) | (b[2] << 16) | (b[1] << 8) | b[0];
-	// return 0;
+	return inet_addr(str);
 }
 
 
@@ -185,13 +76,9 @@ void print_help(void)
 }
 
 
-void printf_ip(unsigned int ip)
+void printf_ip(struct in_addr ip)
 {
-	printf("%hhu.%hhu.%hhu.%hhu", ip >> 24,
-		(ip >> 16) & 0xff,
-		(ip >> 8) & 0xff,
-		ip & 0xff);
-
+	fputs(inet_ntoa(ip), stdout);
 }
 
 
@@ -264,7 +151,7 @@ void print_list(const char *line, const rikor_fru_t *data)
 int read_param(const char *start, const char *mid, char *end, rikor_fru_t *data)
 {
 	int retval = 0;
-	unsigned int ip;
+	struct in_addr ip;
 	char tc;
 
 	syslog(LOG_INFO, " ~ %p  %p  %p", start, mid, end);
@@ -283,9 +170,9 @@ int read_param(const char *start, const char *mid, char *end, rikor_fru_t *data)
 	{
 		tc = *end;
 		*end = 0;
-		ip = parse_ip(mid);
+		ip.s_addr = parse_ip(mid);
 		*end = tc;
-		if(ip != 0) data->ip1 = ip;
+		if(ip.s_addr != 0) data->ip1 = ip;
 		else
 		{
 			retval++;
@@ -296,9 +183,9 @@ int read_param(const char *start, const char *mid, char *end, rikor_fru_t *data)
 	{
 		tc = *end;
 		*end = 0;
-		ip = parse_ip(mid);
+		ip.s_addr = parse_ip(mid);
 		*end = tc;
-		if(ip != 0) data->netmask1 = ip;
+		if(ip.s_addr != 0) data->netmask1 = ip;
 		else
 		{
 			retval++;
@@ -309,9 +196,9 @@ int read_param(const char *start, const char *mid, char *end, rikor_fru_t *data)
 	{
 		tc = *end;
 		*end = 0;
-		ip = parse_ip(mid);
+		ip.s_addr = parse_ip(mid);
 		*end = tc;
-		if(ip != 0) data->gate1 = ip;
+		if(ip.s_addr != 0) data->gate1 = ip;
 		else
 		{
 			retval++;
@@ -332,9 +219,9 @@ int read_param(const char *start, const char *mid, char *end, rikor_fru_t *data)
 	{
 		tc = *end;
 		*end = 0;
-		ip = parse_ip(mid);
+		ip.s_addr = parse_ip(mid);
 		*end = tc;
-		if(ip != 0) data->ip2 = ip;
+		if(ip.s_addr != 0) data->ip2 = ip;
 		else
 		{
 			retval++;
@@ -345,9 +232,9 @@ int read_param(const char *start, const char *mid, char *end, rikor_fru_t *data)
 	{
 		tc = *end;
 		*end = 0;
-		ip = parse_ip(mid);
+		ip.s_addr = parse_ip(mid);
 		*end = tc;
-		if(ip != 0) data->netmask2 = ip;
+		if(ip.s_addr != 0) data->netmask2 = ip;
 		else
 		{
 			retval++;
@@ -358,9 +245,9 @@ int read_param(const char *start, const char *mid, char *end, rikor_fru_t *data)
 	{
 		tc = *end;
 		*end = 0;
-		ip = parse_ip(mid);
+		ip.s_addr = parse_ip(mid);
 		*end = tc;
-		if(ip != 0) data->gate2 = ip;
+		if(ip.s_addr != 0) data->gate2 = ip;
 		else
 		{
 			retval++;
@@ -557,12 +444,12 @@ int main(int argc, char *argv[])
 			if(get_string == NULL)
 			{
 				print_list("dhcp1 ip1 netmask1 gate1 dhcp2 ip2 netmask2 gate2 hostname", &data);
-				printf("\n");
+				putchar('\n');
 			}
 			else
 			{
 				print_list(get_string, &data);
-				printf("\n");
+				putchar('\n');
 			}
 			break;
 		case 3:
@@ -603,32 +490,14 @@ int main(int argc, char *argv[])
 			printf("Board id: 0x%016llX\n\n", data.board_id);
 			if(data.dhcp1 == 1) printf("if1 DINAMIC\n");
 			else printf("if1 STATIC\n");
-			printf("ip1:       %hhu.%hhu.%hhu.%hhu\n", data.ip1 >> 24,
-				(data.ip1 >> 16) & 0xff,
-				(data.ip1 >> 8) & 0xff,
-				data.ip1 & 0xff);
-			printf("netmask1:  %hhu.%hhu.%hhu.%hhu\n", data.netmask1 >> 24,
-				(data.netmask1 >> 16) & 0xff,
-				(data.netmask1 >> 8) & 0xff,
-				data.netmask1 & 0xff);
-			printf("gate1:  %hhu.%hhu.%hhu.%hhu\n\n", data.gate1 >> 24,
-				(data.gate1 >> 16) & 0xff,
-				(data.gate1 >> 8) & 0xff,
-				data.gate1 & 0xff);
+			printf("ip1:       %s\n", inet_ntoa(data.ip1));
+			printf("netmask1:  %s\n", inet_ntoa(data.netmask1));
+			printf("gate1:     %s\n", inet_ntoa(data.gate1));
 			if(data.dhcp2 == 1) printf("if2 DINAMIC\n");
 			else printf("if2 STATIC\n");
-			printf("ip2:       %hhu.%hhu.%hhu.%hhu\n", data.ip2 >> 24,
-				(data.ip2 >> 16) & 0xff,
-				(data.ip2 >> 8) & 0xff,
-				data.ip2 & 0xff);
-			printf("netmask2:  %hhu.%hhu.%hhu.%hhu\n", data.netmask2 >> 24,
-				(data.netmask2 >> 16) & 0xff,
-				(data.netmask2 >> 8) & 0xff,
-				data.netmask2 & 0xff);
-			printf("gate2:  %hhu.%hhu.%hhu.%hhu\n\n", data.gate2 >> 24,
-				(data.gate2 >> 16) & 0xff,
-				(data.gate2 >> 8) & 0xff,
-				data.gate2 & 0xff);
+			printf("ip2:       %s\n", inet_ntoa(data.ip2));
+			printf("netmask2:  %s\n", inet_ntoa(data.netmask2));
+			printf("gate2:     %s\n", inet_ntoa(data.gate2));
 
 			printf("Hostname: <%s>\n", data.hostname);
 			data.psw1[data.psw1size] = 0;

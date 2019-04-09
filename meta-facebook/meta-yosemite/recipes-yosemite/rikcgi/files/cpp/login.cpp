@@ -20,6 +20,11 @@
 using json = nlohmann::json;
 using namespace std::chrono_literals;
 
+extern "C"
+{
+#include <rikor-fru.h>
+}
+
 #define EXPIRED_INTERVAL  180
 
 // Отсюда
@@ -119,8 +124,28 @@ void print_new_key(std::string &l)
 
 bool psw_is_valid(std::string &l, std::string &p)
 {
-	if((l == "root") && (p == "1234")) return true;
-	if((l == "admin") && (p == "qwerty")) return true;
+	int rf = 0;
+	char fru_path[PATH_MAX];
+	rikor_fru_t fru_data;
+	rf = get_fru_device(fru_path);
+	rf += read_fru(fru_path, &fru_data);
+	if(rf != 0)
+		fru_buf_init(&fru_data);
+
+	if(l == "root")
+	{
+		if(check_psw(rikor_fru_psw1, p.c_str(), &fru_data))
+			return true;
+		else
+			return false;
+	}
+	if(l == "admin")
+	{
+		if(check_psw(rikor_fru_psw2, p.c_str(), &fru_data))
+			return true;
+		else
+			return false;
+	}
 	return false;
 }
 

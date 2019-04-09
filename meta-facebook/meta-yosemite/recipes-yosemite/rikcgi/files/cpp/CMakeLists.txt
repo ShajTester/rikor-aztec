@@ -15,6 +15,10 @@ set_target_properties(${PROJECT_NAME}-login PROPERTIES
   COMPILE_OPTIONS -Wpedantic -Wall -Wextra
 )
 
+target_link_libraries(${PROJECT_NAME}-login
+	rikor-fru
+)
+
 
 add_executable(${PROJECT_NAME}-net net.cpp)
 
