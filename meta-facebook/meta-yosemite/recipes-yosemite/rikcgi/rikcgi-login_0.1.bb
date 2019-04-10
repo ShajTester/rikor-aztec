@@ -9,7 +9,7 @@ LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=cc4734e8a01f740811ac41130a40cf90"
 
 DEPENDS += "rikor-fru"
-RDEPENDS_${PN} += "libstdc++ rikor-fru rikor-fru-dev"
+RDEPENDS_${PN} += "libstdc++ rikor-fru"
 
 SRCREV = "${AUTOREV}"
 SRC_URI = "file://cpp"
@@ -22,5 +22,5 @@ S = "${WORKDIR}/cpp"
 
 FBPACKAGEDIR = "/www/pages"
 
-INSANE_SKIP_${PN} += "dev-deps"
+# INSANE_SKIP_${PN} += "dev-deps"
 
