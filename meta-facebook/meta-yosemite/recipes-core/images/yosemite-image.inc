@@ -11,6 +11,7 @@ UBOOT_IMAGE_ENTRYPOINT = "0x40008000"
 # Include modules in rootfs
 IMAGE_INSTALL += " \
   packagegroup-openbmc-base \
+  packagegroup-openbmc-net \
   openbmc-utils \
   sensor-setup \
   rikgpio \
@@ -24,6 +25,10 @@ IMAGE_INSTALL += " \
   "
 #  riknet 
 
+#  packagegroup-openbmc-python3y 
+
+IMAGE_INSTALL += " rikcgi-login"
+
 IMAGE_INSTALL += " watchdog-ctrl"
 
 
@@ -32,6 +37,7 @@ IMAGE_INSTALL += " initsc-lt "
 IMAGE_INSTALL += " rikbtnd "
 
 
+  
 IMAGE_FEATURES += " \
   "
 

@@ -1,6 +1,19 @@
 #!/bin/bash
 
-echo "{"'"'"voltage"'"'":"`./voltage.sh`","'"'"fantach"'"'":"`./fantach.sh`","'"'"sensors"'"'":"`./sensors.sh`"}"
+FWINFO=$(cat /etc/issue.net | awk 'BEGIN{RS=""; FS=" "} {print "Firmware " $3}' | sed 's/yosemite/rikor/')
+FWINFO=$FWINFO" build "$(cat /etc/version)
+
+HWINFO="Rikor R-BD-ESR-V4-16EA v.5 / BIOS 2.8 / PCIE 3.0 / CPU: 2 x Intel Xeon E5 2630 v3 / RAM:256 GB"
+
+JSON="{"
+JSON=$JSON"\"sysinfo\":{\"fwinfo\":\"$FWINFO\",\"hwinfo\":\"$HWINFO\"}"
+JSON=$JSON",\"voltage\":"`./voltage.sh`
+JSON=$JSON",\"fantach\":"`./fantach.sh`
+JSON=$JSON",\"sensors\":"`./sensors.sh`
+JSON=$JSON",\"netconfig\":"`/usr/bin/rikcgi-net --get`
+JSON=$JSON"}"
+
+echo $JSON
 
 #DONE:
 #sensors

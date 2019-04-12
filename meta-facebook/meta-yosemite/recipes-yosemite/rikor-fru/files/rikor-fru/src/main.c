@@ -32,12 +32,14 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #include <stdarg.h>
 #include <limits.h>
-#include "iniparser.h"
-#include "main.h"
+
 #include "rikor-fru.h"
+
+#include <arpa/inet.h>
 
 
 static char *conf_file_name = NULL;
@@ -52,118 +54,9 @@ FILE *text_result;
 
 
 
-/*-------------------------------------------------------------------------*/
-/**
-  @brief    Error callback for iniparser: wraps `fprintf(log_stream, ...)`.
- */
-/*--------------------------------------------------------------------------*/
-static int iniparser_error_callback(const char *format, ...)
+in_addr_t parse_ip(const char *str)
 {
-  int ret;
-  va_list argptr;
-  va_start(argptr, format);
-  ret = vfprintf(log_stream, format, argptr);
-  va_end(argptr);
-  return ret;
-}
-
-
-
-/**
- * \brief Read configuration from config file
- */
-int read_conf_file(int reload)
-{
- //    dictionary *ini;
- //    int ret;
- //    char param_str[20];
- //    const char *name_str;
- //    char cwd[PATH_MAX];
-
-	// if (conf_file_name == NULL) return 0;
-
- //    iniparser_set_error_callback(iniparser_error_callback);
-
- //    ini = iniparser_load(conf_file_name);
-
-	// if (ini == NULL) 
-	// {
-	// 	syslog(LOG_ERR, "Can not open config file: %s, error: %s",
-	// 			conf_file_name, strerror(errno));
-	// 	return -1;
-	// }
-
-	// delay = iniparser_getint(ini, "main:update_delay", 10);
-	// ret = iniparser_getint(ini, "main:output_format", -1);
-
-	// name_str = iniparser_getstring(ini, "main:output_file", "/tmp/out.txt");
-	// if(daemon_cfg.datafilepath != NULL) free(daemon_cfg.datafilepath);
-	// daemon_cfg.datafilepath = malloc(strlen(name_str) + 1);
-	// strcpy(daemon_cfg.datafilepath, name_str);
-
-	// name_str = iniparser_getstring(ini, "main:test_path", "");
-	// if(daemon_cfg.basepath != NULL) free(daemon_cfg.basepath);
-	// if(strlen(name_str) == 0)
-	// {
-	// 	daemon_cfg.basepath = malloc(48);
-	// 	strcpy(daemon_cfg.basepath, "/sys/devices/platform/ast_adc.0");
-	// }
-	// else
-	// {
-	// 	getcwd(cwd, sizeof(cwd));
-	// 	strcat(cwd, "/");
-	// 	strcat(cwd, name_str);
-	// 	daemon_cfg.basepath = malloc(strlen(cwd) + 1);
-	// 	strcpy(daemon_cfg.basepath, cwd);
-	// }
-
-	// for(int i=0; i<16; i++)
-	// {
-	// 	sprintf(param_str, "adc%d:name", i);
-	// 	name_str = iniparser_getstring(ini, param_str, "-");
-	// 	if(adcchndata[i].name != NULL) free(adcchndata[i].name);
-	// 	adcchndata[i].name = malloc(strlen(name_str) + 1);
-	// 	strcpy(adcchndata[i].name, name_str);
-
-	// 	sprintf(param_str, "adc%d:r1", i);
-	// 	adcchndata[i].r1 = iniparser_getint(ini, param_str, 0);
-	// 	sprintf(param_str, "adc%d:r2", i);
-	// 	adcchndata[i].r2 = iniparser_getint(ini, param_str, 1);
-	// 	sprintf(param_str, "adc%d:v2", i);
-	// 	adcchndata[i].v2 = iniparser_getint(ini, param_str, 0);
-	// }
-
-	// if (ret > 0)
-	// {
-	//     iniparser_dump(ini, log_stream);
-
-	// 	if (reload == 1) 
-	// 	{
-	// 		syslog(LOG_INFO, "Reloaded configuration file %s of %s",
-	// 			conf_file_name,
-	// 			app_name);
-	// 	} 
-	// 	else 
-	// 	{
-	// 		syslog(LOG_INFO, "Configuration of %s read from file %s",
-	// 			app_name,
-	// 			conf_file_name);
-	// 	}
-	// }
-
- //    iniparser_freedict(ini);
-
-	return 0;
-}
-
-
-int parse_ip(const char *str)
-{
-	unsigned char b[4];
-	// fprintf(stderr, "\"%s\"\n", str);
-	int ret = sscanf(str, "%hhu.%hhu.%hhu.%hhu", b+3, b+2, b+1, b);
-	if(ret != 4) return 0;
-	return (b[3] << 24) | (b[2] << 16) | (b[1] << 8) | b[0];
+	return inet_addr(str);
 }
 
 
@@ -175,12 +68,235 @@ void print_help(void)
 	printf("Usage: %s [OPTIONS]\n\n", app_name);
 	printf("  Options:\n");
 	printf("   -h --help                 Print this help\n");
-	// printf("   -c --conf_file filename   Read configuration from the file\n");
-	// printf("   -l --log_file  filename   Write logs to the file\n");
-	printf("   -g --get                  Get ip address\n");
-	printf("   -s --set xxx.xxx.xxx.xxx  Store ip address\n");
+	printf("   -g --get='<param list>'   Get data\n");
+	printf("   -s --set='<param list>'   Store data\n");
+	printf("   -a --addr xx              FRU address. Between 0x50, 0x57.\n");
+	printf("   -b --faddr path           Path to the file with the FRU address.\n");
 	printf("\n");
 }
+
+
+void printf_ip(struct in_addr ip)
+{
+	fputs(inet_ntoa(ip), stdout);
+}
+
+
+void print_param(const char *start, const char *end, const rikor_fru_t *data)
+{
+	if(strncmp(start, "dhcp1", (end - start)) == 0)
+	{
+		if(data->dhcp1 == 1) printf("dhcp");
+		else printf("static");
+	}
+	else if(strncmp(start, "ip1", (end - start)) == 0)
+	{
+		printf_ip(data->ip1);
+	}
+	else if(strncmp(start, "netmask1", (end - start)) == 0)
+	{
+		printf_ip(data->netmask1);
+	}
+	else if(strncmp(start, "gate1", (end - start)) == 0)
+	{
+		printf_ip(data->gate1);
+	}
+	else if(strncmp(start, "dhcp2", (end - start)) == 0)
+	{
+		if(data->dhcp2 == 1) printf("dhcp");
+		else printf("static");
+	}
+	else if(strncmp(start, "ip2", (end - start)) == 0)
+	{
+		printf_ip(data->ip2);
+	}
+	else if(strncmp(start, "netmask2", (end - start)) == 0)
+	{
+		printf_ip(data->netmask2);
+	}
+	else if(strncmp(start, "gate2", (end - start)) == 0)
+	{
+		printf_ip(data->gate2);
+	}
+	else if(strncmp(start, "hostname", (end - start)) == 0)
+	{
+		printf("%s", data->hostname);
+	}
+	else
+	{
+		for(const char *i=start; i<end; i++)
+			putchar(*i);
+		putchar('\n');
+	}
+}
+
+
+void print_list(const char *line, const rikor_fru_t *data)
+{
+	const char *c = line;
+	const char *start = line;
+	for(; *c != 0; c++)
+	{
+		if(*c == ' ')
+		{
+			print_param(start, c, data);
+			putchar(' ');
+			start = c + 1;
+		}
+	}
+	if(start != c) print_param(start, c, data);
+}
+
+
+int read_param(const char *start, const char *mid, char *end, rikor_fru_t *data)
+{
+	int retval = 0;
+	struct in_addr ip;
+	char tc;
+
+	syslog(LOG_INFO, " ~ %p  %p  %p", start, mid, end);
+
+	if(strncmp(start, "dhcp1", (mid - start - 1)) == 0)
+	{
+		if(strncmp(mid, "yes", (end - mid)) == 0) data->dhcp1 = 1;
+		else if(strncmp(mid, "no", (end - mid)) == 0) data->dhcp1 = 0;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param dhcp1 data error");
+		}
+	}
+	else if(strncmp(start, "ip1", (mid - start - 1)) == 0)
+	{
+		tc = *end;
+		*end = 0;
+		ip.s_addr = parse_ip(mid);
+		*end = tc;
+		if(ip.s_addr != 0) data->ip1 = ip;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param ip1 data error");
+		}
+	}
+	else if(strncmp(start, "netmask1", (mid - start - 1)) == 0)
+	{
+		tc = *end;
+		*end = 0;
+		ip.s_addr = parse_ip(mid);
+		*end = tc;
+		if(ip.s_addr != 0) data->netmask1 = ip;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param netmask1 data error");
+		}
+	}
+	else if(strncmp(start, "gate1", (mid - start - 1)) == 0)
+	{
+		tc = *end;
+		*end = 0;
+		ip.s_addr = parse_ip(mid);
+		*end = tc;
+		if(ip.s_addr != 0) data->gate1 = ip;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param gate1 data error");
+		}
+	}
+	else if(strncmp(start, "dhcp2", (mid - start - 1)) == 0)
+	{
+		if(strncmp(mid, "yes", (end - mid)) == 0) data->dhcp2 = 1;
+		else if(strncmp(mid, "no", (end - mid)) == 0) data->dhcp2 = 0;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param dhcp2 data error");
+		}
+	}
+	else if(strncmp(start, "ip2", (mid - start - 1)) == 0)
+	{
+		tc = *end;
+		*end = 0;
+		ip.s_addr = parse_ip(mid);
+		*end = tc;
+		if(ip.s_addr != 0) data->ip2 = ip;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param ip2 data error");
+		}
+	}
+	else if(strncmp(start, "netmask2", (mid - start - 1)) == 0)
+	{
+		tc = *end;
+		*end = 0;
+		ip.s_addr = parse_ip(mid);
+		*end = tc;
+		if(ip.s_addr != 0) data->netmask2 = ip;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param netmask2 data error");
+		}
+	}
+	else if(strncmp(start, "gate2", (mid - start - 1)) == 0)
+	{
+		tc = *end;
+		*end = 0;
+		ip.s_addr = parse_ip(mid);
+		*end = tc;
+		if(ip.s_addr != 0) data->gate2 = ip;
+		else
+		{
+			retval++;
+			syslog(LOG_ERR, "Read param gate2 data error");
+		}
+	}
+	else if(strncmp(start, "hostname", (mid - start - 1)) == 0)
+	{
+		strncpy(data->hostname, mid, end - mid);
+		*(data->hostname + (end - mid)) = 0;
+	}
+	else
+	{
+		for(const char *i=start; i<end; i++)
+			putchar(*i);
+		putchar('\n');
+		retval++;
+	}
+
+	return 1;
+}
+
+
+int read_list(char *line, rikor_fru_t *data)
+{
+	char *c = line;
+	const char *start = line;
+	const char *mid = line;
+	int retval = 0;
+
+	for(; *c != 0; c++)
+	{
+		if(*c == ' ')
+		{
+			if(mid <= start)
+			{
+				mid = c + 1;
+			}
+			else
+			{
+				retval += read_param(start, mid, c, data);
+				start = c + 1;
+			}
+		}
+	}
+	if((start < mid) && (mid < c)) read_param(start, mid, c, data);
+	return retval;
+}
+
 
 /* Main function */
 int main(int argc, char *argv[])
@@ -190,73 +306,95 @@ int main(int argc, char *argv[])
 
 	static struct option long_options[] = 
 	{
-		// {"conf_file", required_argument, 0, 'c'},
-		// {"log_file", required_argument, 0, 'l'},
-		{"help", no_argument, 0, 'h'},
-		{"set", required_argument, 0, 's'},
-		{"get", no_argument, 0, 'g'},
+		{"help",  no_argument,       0, 'h'},
+		{"set",   required_argument, 0, 's'},
+		{"get",   optional_argument, 0, 'g'},
+		{"addr",  required_argument, 0, 'a'},
+		{"faddr", required_argument, 0, 'b'},
+		{"initdata", no_argument,    0, 'z'},
 		{NULL, 0, 0, 0}
 	};
 
 	int value;
 	int option_index = 0;
-	char *log_file_name = NULL;
 	char *ip_string = NULL;
+	char *get_string = NULL;
 	int func = 0;
+	int at24addr = 0x50;
 
 	app_name = argv[0];
 
+    openlog("rikor-fru", LOG_CONS, LOG_USER);
+
+
 	/* Try to process all command line arguments */
-	while ((value = getopt_long(argc, argv, "c:l:hs:g", long_options, &option_index)) != -1) 
+	while ((value = getopt_long(argc, argv, "hs:g::a:b:", long_options, &option_index)) != -1) 
 	{
 		switch (value) 
 		{
-			case 'c':
-				conf_file_name = strdup(optarg);
-				break;
-			case 'l':
-				log_file_name = strdup(optarg);
-				break;
-			case 'h':
-				print_help();
-				return EXIT_SUCCESS;
-			case '?':
-				print_help();
-				return EXIT_FAILURE;
 			case 's':
-				ip_string = strdup(optarg);
 				func = 1;
+				get_string = strdup(optarg);
 				break;
 			case 'g':
 				func = 2;
+				if(optarg != NULL)
+				{
+					get_string = strdup(optarg);
+				}
 				break;
+			case 'a':
+				sscanf(optarg, "%x", &at24addr);
+				if((at24addr < 0x50) || (at24addr > 0x57))
+				{
+					syslog(LOG_ERR, "Wrong AT24C02 address %d\n", at24addr);
+					at24addr = 0x50;
+				}
+				break;
+			case 'b':
+			{
+				FILE *ffaddr = fopen(optarg, "rb");
+				if(ffaddr == NULL)
+				{
+					syslog(LOG_ERR, "Can not open file: %s, error: %s\n",
+						optarg, strerror(errno));
+				}
+				else
+				{
+					fscanf(ffaddr, "%x", &at24addr);
+					if((at24addr < 0x50) || (at24addr > 0x57))
+					{
+						syslog(LOG_ERR, "Wrong AT24C02 address %d\n", at24addr);
+						at24addr = 0x50;
+					}
+				}
+				break;
+			}
+			case 'z':
+				func = 3;
+				break;
+			case '0':
+			case '1':
+				syslog(LOG_ERR, "NUMBER %s: option '-%c' is invalid: ignored\n", argv[0], optopt);
+				break;
+			case 'h':
+			case '?':
+				print_help();
+				break;
+			case ':':
 			default:
+				syslog(LOG_ERR, "%s: option '-%c' is invalid: ignored\n", argv[0], optopt);
 				break;
 		}
 	}
 
-	/* Try to open log file */
-	if (log_file_name != NULL) 
-	{
-		log_stream = fopen(log_file_name, "a+");
-		if (log_stream == NULL) 
-		{
-			fprintf(stderr, "Can not open log file: %s, error: %s\n",
-				log_file_name, strerror(errno));
-			log_stream = stdout;
-		}
-	} 
-	else 
-	{
-		log_stream = stdout;
-	}
 
 
-
-
-
+	char eeprom_path[256];
 	rikor_fru_t data;
 	int rf;
+
+	sprintf(eeprom_path, EEPROM_PATH, at24addr);
 
 	if((rf = fru_buf_init(&data)) == 0)
 	{
@@ -264,97 +402,115 @@ int main(int argc, char *argv[])
 		switch(func)
 		{
 		case 1:
-			// Store IP
-			printf("%08x\n", parse_ip(ip_string));
-			if((rf = read_fru(EEPROM_PATH, &data)) == 0)
-			{ // Данные успешно прочитаны
-				data.ip1 = parse_ip(ip_string);
-				if(data.ip1 != 0)
-				{
-					if(write_fru(EEPROM_PATH, &data) != 0)
-					{
-						fprintf(stderr, "EEPROM write error\n");
-						retval = 1;
-					}
-				}
-				else
-				{
-					fprintf(stderr, "Error in ip string: \"%s\"\n", ip_string);
-					retval = 3;
-				}
-			}
-			else if(rf == ERRCRC)
+			// Store data
+			rf = read_fru(eeprom_path, &data);
+			if(rf == ERRCRC)
 			{ // Из EEPROM прочитаны неправильные данные
-				fprintf(stderr, "EEPROM CRC error\n");
+				syslog(LOG_ERR, "EEPROM CRC error");
 				fru_buf_init(&data);
-				data.ip1 = parse_ip(ip_string);
-				if(data.ip1 != 0)
-				{
-					if(write_fru(EEPROM_PATH, &data) != 0)
-					{
-						fprintf(stderr, "EEPROM write error\n");
-						retval = 1;
-					}
-				}
-				else
-				{
-					fprintf(stderr, "Error in ip string: \"%s\"\n", ip_string);
-					retval = 3;
-				}
+				retval = 1;
+			}
+			else if(rf != 0)
+			{ // Данные успешно прочитаны
+				syslog(LOG_ERR, "EEPROM read error %d", rf);
+				retval = 1;
+				// Если eeprom прочитать не смогли, то записать точно не сможем
+				break;
+			}
+
+			rf = read_list(get_string, &data);
+			if(write_fru(eeprom_path, &data) != 0)
+			{
+				syslog(LOG_ERR, "EEPROM write error");
 				retval = 1;
 			}
 			break;
 		case 2:
 			// Get IP
-			rf = read_fru(EEPROM_PATH, &data);
-			if(rf == 0)
+			rf = read_fru(eeprom_path, &data);
+			if(rf == ERRCRC)
 			{
-				printf("%hhu.%hhu.%hhu.%hhu\n", data.ip1 >> 24,
-					(data.ip1 >> 16) & 0xff,
-					(data.ip1 >> 8) & 0xff,
-					data.ip1 & 0xff);
-				retval = 0;
-			}	
-			else if(rf == ERRCRC)
-			{
-				fprintf(stderr, "EEPROM CRC error\n");
+				syslog(LOG_ERR, "EEPROM CRC error");
+				fru_buf_init(&data);
 				retval = 1;
+			}
+			else if(rf != 0)
+			{
+				syslog(LOG_ERR, "EEPROM read error %d", rf);
+				fru_buf_init(&data);
+				retval = 1;
+			}
+
+			if(get_string == NULL)
+			{
+				print_list("dhcp1 ip1 netmask1 gate1 dhcp2 ip2 netmask2 gate2 hostname", &data);
+				putchar('\n');
 			}
 			else
 			{
-				fprintf(stderr, "EEPROM read error %d\n", rf);
+				print_list(get_string, &data);
+				putchar('\n');
+			}
+			break;
+		case 3:
+			// Инициализация eeprom данными по умолчанию
+			rf = read_fru(eeprom_path, &data);
+			if(rf == ERRCRC)
+			{
+				rf = fru_buf_init(&data);
+				if(write_fru(eeprom_path, &data) != 0)
+				{
+					syslog(LOG_ERR, "EEPROM write error");
+					retval = 1;
+				}
+			}
+			else
+			{
+				syslog(LOG_ERR, "The correct data has already been written to the EEPROM.");
 				retval = 1;
 			}
 			break;
 		default:
 			// Get all FRU data
-			rf = read_fru(EEPROM_PATH, &data);
-			if(rf == 0)
+			rf = read_fru(eeprom_path, &data);
+			if(rf == ERRCRC)
 			{
-				printf("FRU id:   0x%08X\n", data.id);
-				printf("Board id: 0x%016llX\n", data.board_id);
-				printf("ip:       %hhu.%hhu.%hhu.%hhu\n", data.ip1 >> 24,
-					(data.ip1 >> 16) & 0xff,
-					(data.ip1 >> 8) & 0xff,
-					data.ip1 & 0xff);
-				retval = 0;
-			}				
-			else if(rf == ERRCRC)
-			{
-				fprintf(stderr, "EEPROM CRC error\n");
+				syslog(LOG_ERR, "EEPROM CRC error\n");
+				fru_buf_init(&data);
 				retval = 1;
 			}
-			else
+			else if(rf != 0)
 			{
-				fprintf(stderr, "EEPROM read error %d\n", rf);
+				syslog(LOG_ERR, "EEPROM read error %d\n", rf);
+				fru_buf_init(&data);
 				retval = 1;
 			}
+
+			printf("FRU id:   0x%08X\n", data.id);
+			printf("Board id: 0x%016llX\n\n", data.board_id);
+			if(data.dhcp1 == 1) printf("if1 DINAMIC\n");
+			else printf("if1 STATIC\n");
+			printf("ip1:       %s\n", inet_ntoa(data.ip1));
+			printf("netmask1:  %s\n", inet_ntoa(data.netmask1));
+			printf("gate1:     %s\n", inet_ntoa(data.gate1));
+			if(data.dhcp2 == 1) printf("if2 DINAMIC\n");
+			else printf("if2 STATIC\n");
+			printf("ip2:       %s\n", inet_ntoa(data.ip2));
+			printf("netmask2:  %s\n", inet_ntoa(data.netmask2));
+			printf("gate2:     %s\n", inet_ntoa(data.gate2));
+
+			printf("Hostname: <%s>\n", data.hostname);
+			data.psw1[data.psw1size] = 0;
+			printf("psw1:     <%s>\n", data.psw1);
+			data.psw2[data.psw2size] = 0;
+			printf("psw2:     <%s>\n", data.psw2);
+			retval = 0;
 			break;
 		}
 	}
 	else
 	{
-		fprintf(stderr, "error in fru_buf_init()\n");
+		syslog(LOG_ERR, "error in fru_buf_init()\n");
 		retval = 2;
 	}
 
@@ -362,15 +518,15 @@ int main(int argc, char *argv[])
 
 
 	/* Close log file, when it is used. */
-	if (log_stream != stdout) {
-		fclose(log_stream);
-	}
+	// if (log_stream != stdout) {
+	// 	fclose(log_stream);
+	// }
 
 	/* Free allocated memory */
+	if(ip_string != NULL) free(ip_string);
+	if(get_string != NULL) free(get_string);
 
 	/* Free allocated memory */
-	if (conf_file_name != NULL) free(conf_file_name);
-	if (log_file_name != NULL) free(log_file_name);
 
 	return retval;
 }
