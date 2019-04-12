@@ -29,7 +29,7 @@ void encryptDecrypt(char *toEncrypt, int len)
 
 
 
-int fru_buf_init(rikor_fru_t *const data)
+int fru_buf_init(rikor_fru_t *data)
 {
 	data->id = 0xaa5555aa;
 	data->board_id = 0x1234567890abcdefL;
@@ -85,7 +85,7 @@ int get_fru_device(char *path)
 }
 
 
-int read_fru(const char *device, rikor_fru_t *const data)
+int read_fru(const char *device, rikor_fru_t *data)
 {
 	// unsigned char buf[256];
 	FILE *fp;
@@ -129,7 +129,7 @@ int read_fru(const char *device, rikor_fru_t *const data)
 
 
 
-int write_fru(const char *device, const rikor_fru_t *const data)
+int write_fru(const char *device, const rikor_fru_t *data)
 {
 	FILE *fp;
 	unsigned short crc;
@@ -154,7 +154,7 @@ int write_fru(const char *device, const rikor_fru_t *const data)
 
 
 
-bool check_psw(rikor_fru_psw_t psw, const char *str, const rikor_fru_t *const data)
+bool check_psw(rikor_fru_psw_t psw, const char *str, const rikor_fru_t *data)
 {
 	int sz;
 	char dpsw[17];
@@ -177,9 +177,20 @@ bool check_psw(rikor_fru_psw_t psw, const char *str, const rikor_fru_t *const da
 }
 
 
-bool set_psw(rikor_fru_psw_t psw, const char *oldPsw, const char *newPsw, const rikor_fru_t *const data)
+int set_psw(const char *device, rikor_fru_psw_t psw, const char *oldPsw, const char *newPsw, const rikor_fru_t *data)
 {
-	return false;
+	return -1;
 }
 
+
+int set_brd_state(const char *device, const char state)
+{
+	return -1;
+}
+
+
+int get_brd_state(const char *device, char *state)
+{
+	return -1;
+}
 

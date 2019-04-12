@@ -56,11 +56,14 @@ typedef enum
 
 int get_fru_device(char *path);
 
-int fru_buf_init(rikor_fru_t *const data);
-int read_fru(const char *device, rikor_fru_t *const data);
-int write_fru(const char *device, const rikor_fru_t *const data);
+int fru_buf_init(rikor_fru_t *data);
+int read_fru(const char *device, rikor_fru_t *data);
+int write_fru(const char *device, const rikor_fru_t *data);
 
-bool check_psw(rikor_fru_psw_t psw, const char *str, const rikor_fru_t *const data);
-bool set_psw(rikor_fru_psw_t psw, const char *oldPsw, const char *newPsw, const rikor_fru_t *const data);
+bool check_psw(rikor_fru_psw_t psw, const char *str, const rikor_fru_t *data);
+int set_psw(const char *device, rikor_fru_psw_t psw, const char *oldPsw, const char *newPsw, const rikor_fru_t *data);
+
+int set_brd_state(const char *device, const char state);
+int get_brd_state(const char *device, char *state);
 
 #endif // RIKOR_FRU_H
