@@ -166,6 +166,60 @@ int fill_net_info(json &jout)
 
 
 
+bool key_is_valid(std::string &l, const std::string &k, bool delete_key)
+{
+	bool retval = false;
+	std::string fkey;
+	std::string flogin;
+	std::time_t expired;
+
+	std::string fname;
+
+	// Поиск файлов сессий
+	auto dir = opendir("/tmp/rikcgi-login/");
+	if(dir != NULL)
+	{
+		auto entity = readdir(dir);
+		while(entity != NULL)
+		{
+			if (entity->d_name[0] != '.') 
+			{
+				if(entity->d_type == DT_REG)
+				{
+					fname = "/tmp/rikcgi-login/";
+					fname += entity->d_name;
+					std::ifstream f(fname);
+					if(f.is_open())
+					{
+						f >> fkey;
+						f >> flogin;
+						f >> expired;
+						f.close();
+						auto tnow = std::time(0);
+						if((fkey == k) && (expired > tnow))
+						{
+							retval = true;
+							l = flogin;
+							if(delete_key)
+								if(remove(fname.c_str()) != 0)
+									syslog(LOG_ERR, "Error deleting file %s", fname.c_str());
+							break;
+						}
+						else if(expired < tnow)
+						{
+							if(remove(fname.c_str()) != 0)
+								syslog(LOG_ERR, "Error deleting file %s", fname.c_str());
+						}
+					}
+				}
+			}
+			entity = readdir(dir);
+		}
+	}
+	return retval;
+}
+
+
 int main(int argc, char const *argv[])
 {
     openlog("rikcgi-net", LOG_CONS, LOG_USER);
@@ -175,11 +229,10 @@ int main(int argc, char const *argv[])
 	{
 		if(std::strcmp(argv[1], "--store") == 0)
 		{
-			syslog(LOG_INFO, " ~~~ STORE command");
 		    std::string str;
 		    std::getline(std::cin, str);
-			syslog(LOG_INFO, " %s", str.c_str());
 			json jin;
+
 			try
 			{
 				jin = json::parse(str);
@@ -191,52 +244,68 @@ int main(int argc, char const *argv[])
 
 			syslog(LOG_INFO, " ~~~ IN %s", jin.dump().c_str());
 
-			int rf = 0;
-			char fru_path[PATH_MAX];
-			rikor_fru_t fru_data;
-			rf = get_fru_device(fru_path);
-			rf += read_fru(fru_path, &fru_data);
-			if(rf != 0)
-			{
-				syslog(LOG_ERR, "Error while read FRU");
-				fru_buf_init(&fru_data);
-			}
+			std::string in_login;
+			std::string in_key;
 
-			if(jin.count("hostname") > 0)
+			if(jin.count("login") == 1)     in_login     = jin["login"].get<std::string>();
+			if(jin.count("key") == 1)       in_key       = jin["key"].get<std::string>();
+
+			if(key_is_valid(in_login, in_key, false))
 			{
-				strcpy(fru_data.hostname, jin["hostname"].get<std::string>().c_str());
+				int rf = 0;
+				char fru_path[PATH_MAX];
+				rikor_fru_t fru_data;
+				rf = get_fru_device(fru_path);
+				rf += read_fru(fru_path, &fru_data);
+				if(rf != 0)
+				{
+					syslog(LOG_ERR, "FRU read error");
+					fru_buf_init(&fru_data);
+				}
+
+				if(jin.count("hostname") > 0)
+				{
+					strcpy(fru_data.hostname, jin["hostname"].get<std::string>().c_str());
+				}
+				if(jin.count("addr") > 0)
+				{
+					inet_aton(jin["addr"].get<std::string>().c_str(), &fru_data.ip1);
+				}
+				if(jin.count("mask") > 0)
+				{
+					inet_aton(jin["mask"].get<std::string>().c_str(), &fru_data.netmask1);
+				}
+				if(jin.count("gateway") > 0)
+				{
+					inet_aton(jin["gateway"].get<std::string>().c_str(), &fru_data.gate1);
+				}
+				if(jin.count("dns") > 0)
+				{
+					inet_aton(jin["dns"].get<std::string>().c_str(), &fru_data.dns1_1);
+				}
+				if(jin.count("dhcp") > 0)
+				{
+					if(jin["dhcp"] == "yes")
+						fru_data.dhcp1 = 1;
+					else
+						fru_data.dhcp1 = 0;
+				}
+				rf = write_fru(fru_path, &fru_data);
+				if(rf != 0)
+					syslog(LOG_ERR, "FRU write error");
 			}
-			if(jin.count("addr") > 0)
+			else
 			{
-				inet_aton(jin["addr"].get<std::string>().c_str(), &fru_data.ip1);
+				syslog(LOG_ERR, "Invaid key");
 			}
-			if(jin.count("mask") > 0)
-			{
-				inet_aton(jin["mask"].get<std::string>().c_str(), &fru_data.netmask1);
-			}
-			if(jin.count("gateway") > 0)
-			{
-				inet_aton(jin["gateway"].get<std::string>().c_str(), &fru_data.gate1);
-			}
-			if(jin.count("dns") > 0)
-			{
-				inet_aton(jin["dns"].get<std::string>().c_str(), &fru_data.dns1_1);
-			}
-			if(jin.count("dhcp") > 0)
-			{
-				if(jin["dhcp"] == "yes")
-					fru_data.dhcp1 = 1;
-				else
-					fru_data.dhcp1 = 0;
-			}
-			rf = write_fru(fru_path, &fru_data);
-			if(rf != 0)
-				syslog(LOG_ERR, "Error while write FRU");
 		}
 		else
 		{ // --get
 			if((argc > 1) && (std::strcmp(argv[1], "--get") == 0))
 				syslog(LOG_INFO, " ~~~ GET command");
+			else
+				syslog(LOG_ERR, "Invalid argument <%s>", argv[1]);
+
 			json jout;
 			fill_net_info(jout);
 			// std::cout << "{\"mac\":\"aa-bb-cc-dd-ee-ff\",\"hostname\":\"testtest\",\"dhcp\":\"yes\",\"addr\":\"10.10.0.222\",\"mask\":\"255.255.255.0\",\"gateway\":\"10.10.0.1\",\"dns\":\"\",\"ip6_addr\":\"\",\"ip6_com\":\"add\",\"ip6_auto_conf\":\"on\",\"ip6_dhcp\":\"stateless\"}";
@@ -289,7 +358,7 @@ int main(int argc, char const *argv[])
 				if(s != 0)
 					std::cout << "getnameinfo() failed: " << gai_strerror(s) << std::endl;
 				else
-					std::cout << ifa->ifa_name << "\t\taddress: <" << host << ">" << std::endl;
+					std::cout << ifa->ifa_name << "\taddress: <" << host << ">" << std::endl;
 
 				s = getnameinfo(ifa->ifa_netmask, sizeof(struct sockaddr_in6), host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
 				if(s != 0)

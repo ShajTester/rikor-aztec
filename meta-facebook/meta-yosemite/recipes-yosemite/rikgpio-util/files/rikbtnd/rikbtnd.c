@@ -39,7 +39,8 @@
 
 // Отсюда
 // https://stackoverflow.com/a/36095407
-static long long get_nanos(void) {
+static long long get_nanos(void)
+{
     struct timespec ts;
     timespec_get(&ts, TIME_UTC);
     return (long long)ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
@@ -60,7 +61,10 @@ static void gpio_event_handle(gpio_poll_st *gp)
     if((tt - id_last_time) > 600)
     {
       if(gpio_get(gpio_num("GPIOD5")) == GPIO_VALUE_LOW)
+      {
         syslog(LOG_INFO, "ID button pressed");
+        gpio_set(gpio_num("GPIOD6"), GPIO_VALUE_HIGH);
+      }
     }
     id_last_time = tt;
   }

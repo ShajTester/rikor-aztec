@@ -28,7 +28,7 @@ SRC_URI = "file://rikbtnd \
 
 S = "${WORKDIR}/rikbtnd"
 
-DEPENDS += " glibc libgpio update-rc.d-native "
+DEPENDS += "glibc libgpio update-rc.d-native"
 
 pkgdir = "rikbtnd"
 
@@ -39,11 +39,17 @@ do_install() {
   install -d $bin
   install -m 755 rikbtnd ${dst}/rikbtnd
   ln -snf ../fbpackages/${pkgdir}/rikbtnd ${bin}/rikbtnd
+
+  install -d ${D}${sysconfdir}/init.d
+  install -d ${D}${sysconfdir}/rcS.d
+  install -m 755 rikbtnd-setup.sh ${D}${sysconfdir}/init.d/rikbtnd-setup.sh
+  update-rc.d -r ${D} rikbtnd-setup.sh start 99 S .
 }
 
 FBPACKAGEDIR = "${prefix}/local/fbpackages"
 
 FILES_${PN} = "${FBPACKAGEDIR}/rikbtnd ${prefix}/local/bin"
+FILES_${PN} += "${sysconfdir}"
 
 RDEPENDS_${PN} = "glibc libgpio"
 
