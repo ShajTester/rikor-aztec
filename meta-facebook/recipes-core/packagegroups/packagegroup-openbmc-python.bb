@@ -6,7 +6,6 @@ PR = "r1"
 inherit packagegroup
 
 RDEPENDS_${PN} += " \
-  python-argparse \
   python-core \
   python-ctypes \
   python-datetime \
