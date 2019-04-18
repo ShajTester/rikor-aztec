@@ -156,30 +156,45 @@ int write_fru(const char *device, const rikor_fru_t *data)
 
 bool check_psw(rikor_fru_psw_t psw, const char *str, const rikor_fru_t *data)
 {
-	int sz;
 	char dpsw[17];
 	if(psw == rikor_fru_psw1)
 	{
-		sz = data->psw1size;
-		strncpy(dpsw, data->psw1, sz);
+		strcpy(dpsw, data->psw1);
 	}
 	else if(psw == rikor_fru_psw2)
 	{
-		sz = data->psw2size;
-		strncpy(dpsw, data->psw2, sz);
+		strcpy(dpsw, data->psw2);
 	}
 	else return false;
 
-	encryptDecrypt(dpsw, sz);
+	encryptDecrypt(dpsw, strlen(dpsw));
 	if(strcmp(dpsw, str) == 0) return true;
 
 	return false;
 }
 
 
-int set_psw(const char *device, rikor_fru_psw_t psw, const char *oldPsw, const char *newPsw, const rikor_fru_t *data)
+int set_psw(rikor_fru_psw_t psw, const char *oldPsw, const char *newPsw, rikor_fru_t *data)
 {
-	return -1;
+	char *dest;
+	if(psw == rikor_fru_psw1)
+		dest = data->psw1;
+	else
+		dest = data->psw2;
+
+	if(strlen(newPsw) <= 16)
+	{
+		strcpy(dest, newPsw);
+		encryptDecrypt(dest, strlen(newPsw));
+	}
+	else
+	{
+		strncpy(dest, newPsw, 16);
+		dest[16] = 0;
+		encryptDecrypt(dest, 16);
+	}
+
+	return 0;
 }
 
 

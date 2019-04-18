@@ -14,34 +14,29 @@
 # Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301 USA
-#
 
-SUMMARY = "CGI scripts for lighttpd"
-DESCRIPTION = "Functions for httpd requests server"
-SECTION = "base"
-PR = "r1"
-LICENSE = "GPLv2"
-LIC_FILES_CHKSUM = "file://Makefile;md5=dab47dd8221aba77db5cbfd76dbff5eb"
 
-DEPENDS += "bash"
 
-SRC_URI = "file://sh "
+# binary: gpio_name.o 
+# 	$(CC) -o rikgpio gpio_name.o  
 
-S = "${WORKDIR}/sh"
+# gpio_name.o: gpio_name.c
+# 	$(CC) -c -I /home/tohas/fbook_openbmc/openBMC_rev2/openbmc/common/recipes-core/rikgpio/files gpio_name.c
 
-pkgdir = "rikcgi"
+# clean:
+# 	rm -f *.o binary
 
-do_install() {
-  dst="${D}/www/pages"
-  bin="${D}/www/bin"
-  install -d $dst
-  install -d $bin
-  install -m 755 *.sh ${dst}
-}
 
-FBPACKAGEDIR = "/www/pages"
 
-FILES_${PN} = "${FBPACKAGEDIR} /www/bin"
+all: rikgpio
 
-RDEPENDS_${PN} += "bash"
+CFLAGS += -Wall -Werror
+
+rikgpio: rikgpio.c 
+	$(CC) $(CFLAGS) -D _XOPEN_SOURCE -pthread -lgpio -std=c99 -o $@ $^ $(LDFLAGS)
+
+.PHONY: clean
+
+clean:
+	rm -rf *.o rikgpio
 

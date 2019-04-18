@@ -61,7 +61,7 @@ int read_fru(const char *device, rikor_fru_t *data);
 int write_fru(const char *device, const rikor_fru_t *data);
 
 bool check_psw(rikor_fru_psw_t psw, const char *str, const rikor_fru_t *data);
-int set_psw(const char *device, rikor_fru_psw_t psw, const char *oldPsw, const char *newPsw, const rikor_fru_t *data);
+int set_psw(rikor_fru_psw_t psw, const char *oldPsw, const char *newPsw, rikor_fru_t *data);
 
 int set_brd_state(const char *device, const char state);
 int get_brd_state(const char *device, char *state);

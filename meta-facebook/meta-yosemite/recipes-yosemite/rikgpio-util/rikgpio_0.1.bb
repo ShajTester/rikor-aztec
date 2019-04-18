@@ -14,12 +14,37 @@
 # Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301 USA
+#
 
-binary: gpio_name.o 
-	$(CC) -o rikgpio gpio_name.o  
+SUMMARY = ""
+DESCRIPTION = ""
+SECTION = "base"
+PR = "r1"
+LICENSE = "GPLv2"
+LIC_FILES_CHKSUM = "file://LICENSE;md5=8264535c0c4e9c6c335635c4026a8022"
 
-gpio_name.o: gpio_name.c
-	$(CC) -c -I /home/tohas/fbook_openbmc/openBMC_rev2/openbmc/common/recipes-core/rikgpio/files gpio_name.c
+SRC_URI = "file://rikgpio \
+          "
 
-clean:
-	rm -f *.o binary
+S = "${WORKDIR}/rikgpio"
+
+DEPENDS += " glibc libgpio update-rc.d-native"
+
+pkgdir = "rikgpio"
+
+do_install() {
+  dst="${D}/usr/local/fbpackages/${pkgdir}"
+  bin="${D}/usr/local/bin"
+  install -d $dst
+  install -d $bin
+  install -m 755 rikgpio ${dst}/rikgpio
+  ln -snf ../fbpackages/${pkgdir}/rikgpio ${bin}/rikgpio
+}
+
+FBPACKAGEDIR = "${prefix}/local/fbpackages"
+
+FILES_${PN} = "${FBPACKAGEDIR}/rikgpio ${prefix}/local/bin"
+
+RDEPENDS_${PN} = "glibc libgpio"
+
+

@@ -35,6 +35,7 @@ IMAGE_INSTALL += " watchdog-ctrl"
 
 IMAGE_INSTALL += " ledblink-lt "
 IMAGE_INSTALL += " initsc-lt "
+IMAGE_INSTALL += " rikbtnd "
 
 
   
