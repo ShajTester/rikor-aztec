@@ -187,7 +187,7 @@ bool key_is_valid(std::string &l, const std::string &k, bool delete_key)
 							if(delete_key)
 								if(remove(fname.c_str()) != 0)
 									syslog(LOG_ERR, "Error deleting file %s", fname.c_str());
-							break;
+							// break;
 						}
 						else if(expired < tnow)
 						{
