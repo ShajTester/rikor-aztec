@@ -13,6 +13,8 @@
 #include <sys/types.h>
 #include <sys/errno.h>
 
+// #include <openbmc/gpio.h>
+
 #include "gpio_name.h"
 
 #define GPIO_BASE_AA0  208
@@ -40,7 +42,7 @@ static short gpio_dir[36] = {FM_SLPS4_DIR, FM_SLPS3_DIR, FM_MEM_THERM_EVENT_DIR,
 int gpio_rikor_num[36] = {};
 /********************************************************************************************/
 
-void main(void)
+int main(void)
 {
   int tmp = 0;
 
@@ -85,7 +87,7 @@ void main(void)
 
   printf("Complete...\n");
 
-  return;
+  return 0;
 }
 
 /********************************************************************************************/

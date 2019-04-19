@@ -16,35 +16,41 @@
 # Boston, MA 02110-1301 USA
 #
 
-SUMMARY = "Terminal Multiplexer"
-DESCRIPTION = "Util for multiplexing terminal"
+SUMMARY = ""
+DESCRIPTION = ""
 SECTION = "base"
 PR = "r1"
 LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=8264535c0c4e9c6c335635c4026a8022"
 
-SRC_URI = "file://gpio.c \
-           file://gpio_name.c \
-           file://gpio.h \
-           file://gpio_name.h \
-           file://Makefile \
-           file://LICENSE \
+SRC_URI = "file://rikbtnd \
           "
 
-S = "${WORKDIR}"
+S = "${WORKDIR}/rikbtnd"
 
-pkgdir = "rikgpio"
+DEPENDS += "glibc libgpio update-rc.d-native"
+
+pkgdir = "rikbtnd"
 
 do_install() {
   dst="${D}/usr/local/fbpackages/${pkgdir}"
   bin="${D}/usr/local/bin"
   install -d $dst
   install -d $bin
-  install -m 755 rikgpio ${dst}/rikgpio
-  ln -snf ../fbpackages/${pkgdir}/rikgpio ${bin}/rikgpio
+  install -m 755 rikbtnd ${dst}/rikbtnd
+  ln -snf ../fbpackages/${pkgdir}/rikbtnd ${bin}/rikbtnd
+
+  install -d ${D}${sysconfdir}/init.d
+  install -d ${D}${sysconfdir}/rcS.d
+  install -m 755 rikbtnd-setup.sh ${D}${sysconfdir}/init.d/rikbtnd-setup.sh
+  update-rc.d -r ${D} rikbtnd-setup.sh start 99 S .
 }
 
 FBPACKAGEDIR = "${prefix}/local/fbpackages"
 
-FILES_${PN} = "${FBPACKAGEDIR}/rikgpio ${prefix}/local/bin"
+FILES_${PN} = "${FBPACKAGEDIR}/rikbtnd ${prefix}/local/bin"
+FILES_${PN} += "${sysconfdir}"
+
+RDEPENDS_${PN} = "glibc libgpio"
+
 

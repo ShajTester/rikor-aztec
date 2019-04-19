@@ -150,7 +150,7 @@ bool psw_is_valid(std::string &l, std::string &p)
 }
 
 
-bool key_is_valid(std::string &l, std::string &k, bool delete_key = false)
+bool key_is_valid(std::string &l, const std::string &k, bool delete_key)
 {
 	bool retval = false;
 	std::string fkey;
@@ -180,11 +180,13 @@ bool key_is_valid(std::string &l, std::string &k, bool delete_key = false)
 						f >> expired;
 						f.close();
 						auto tnow = std::time(0);
-						if((fkey == k) && (flogin == l) && (expired > tnow))
+						if((fkey == k) && (expired > tnow))
 						{
 							retval = true;
-							if(remove(fname.c_str()) != 0)
-								syslog(LOG_ERR, "Error deleting file %s", fname.c_str());
+							l = flogin;
+							if(delete_key)
+								if(remove(fname.c_str()) != 0)
+									syslog(LOG_ERR, "Error deleting file %s", fname.c_str());
 							break;
 						}
 						else if(expired < tnow)
@@ -223,74 +225,110 @@ int main(int argc, char const *argv[])
 
 	syslog(LOG_INFO, " ~~~ IN %s", jin.dump().c_str());
 
-	std::string in_cmd;
-	std::string in_key;
-	std::string in_login;
-	std::string in_psw;
+	if(argc > 1)
+	{
+		if(std::strcmp(argv[1], "--setpassword") == 0)
+		{
+			syslog(LOG_INFO, " ~~~ set password");
+			std::string in_cmd;
+			std::string in_login;
+			std::string in_key;
+			std::string in_password1;
+			std::string in_password2;
+			json jout;
 
-	if(jin.count("command") == 1) in_cmd = jin["command"].get<std::string>();
-	if(jin.count("login") == 1) in_login = jin["login"].get<std::string>();
-	if(jin.count("key") == 1) in_key = jin["key"].get<std::string>();
-	if(jin.count("password") == 1) in_psw = jin["password"].get<std::string>();
+			if(jin.count("command") == 1)   in_cmd       = jin["command"].get<std::string>();
+			if(jin.count("login") == 1)     in_login     = jin["login"].get<std::string>();
+			if(jin.count("key") == 1)       in_key       = jin["key"].get<std::string>();
+			if(jin.count("password1") == 1) in_password1 = jin["password1"].get<std::string>();
+			// if(jin.count("password2") == 1) in_password2 = jin["password"].get<std::string>();
 
-	if(in_cmd.length() == 0)
-	{
-		print_blanc();
-	}
-	else if(in_cmd == "relogin")
-	{
-		print_blanc();
-	}
-	else if(in_cmd == "login")
-	{
-		if(psw_is_valid(in_login, in_psw))
-			print_new_key(in_login);
+			if(key_is_valid(in_login, in_key, false) && (in_cmd == "setpassword"))
+			{
+				int rf = 0;
+				char fru_path[PATH_MAX];
+				rikor_fru_t fru_data;
+				rf = get_fru_device(fru_path);
+				rf += read_fru(fru_path, &fru_data);
+				if(rf != 0)
+					fru_buf_init(&fru_data);
+
+				rf = set_psw(rikor_fru_psw1, "", in_password1.c_str(), &fru_data);
+				rf += write_fru(fru_path, &fru_data);
+				if(rf == 0)
+				{
+					jout["password1"] = "Password change successful";
+					jout["key"] = "";
+					jout["login"] = "";
+					syslog(LOG_INFO, "New password: Password change successful");
+				}
+				else
+				{
+					jout["password1"] = "EEPROM write error";
+					// jout["key"] = "";
+					// jout["login"] = "";
+					syslog(LOG_ERR, "New password: EEPROM write error");
+				}
+			}
+			else
+			{
+				jout["password1"] = "KEY error";
+				// jout["key"] = "";
+				// jout["login"] = "";
+				syslog(LOG_ERR, "New password: KEY error");
+			}
+
+			std::cout << jout;
+		}
 		else
-			print_blanc();
-	}
-	else if(in_cmd == "logout")
-	{
-		key_is_valid(in_login, in_key, true);
-		print_blanc();
-	}
-	else if(in_cmd == "update")
-	{
-		if(key_is_valid(in_login, in_key))
-			print_new_key(in_login);
-		else
-			print_blanc();
+		{
+			syslog(LOG_ERR, "rikcgi-login argument error");
+		}
 	}
 	else
 	{
-		print_blanc();
+		std::string in_cmd;
+		std::string in_key;
+		std::string in_login;
+		std::string in_psw;
+
+		if(jin.count("command") == 1) in_cmd = jin["command"].get<std::string>();
+		if(jin.count("login") == 1) in_login = jin["login"].get<std::string>();
+		if(jin.count("key") == 1) in_key = jin["key"].get<std::string>();
+		if(jin.count("password") == 1) in_psw = jin["password"].get<std::string>();
+
+		if(in_cmd.length() == 0)
+		{
+			print_blanc();
+		}
+		else if(in_cmd == "relogin")
+		{
+			print_blanc();
+		}
+		else if(in_cmd == "login")
+		{
+			if(psw_is_valid(in_login, in_psw))
+				print_new_key(in_login);
+			else
+				print_blanc();
+		}
+		else if(in_cmd == "logout")
+		{
+			key_is_valid(in_login, in_key, true);
+			print_blanc();
+		}
+		else if(in_cmd == "update")
+		{
+			if(key_is_valid(in_login, in_key, true))
+				print_new_key(in_login);
+			else
+				print_blanc();
+		}
+		else
+		{
+			print_blanc();
+		}
 	}
-
-
-	// if(in_login.length() == 0)
-	// { // Если в запросе не пришло логина, то нам этот запрос точно не интересен
-	// 	print_blanc();
-	// }
-	// else
-	// { // В запросе есть логин
-	// 	if(in_key.length() != 0)
-	// 	{ // Передан ключ и логин
-	// 		if(key_is_valid(in_login, in_key))
-	// 			print_new_key(in_login);
-	// 		else
-	// 			print_blanc();
-	// 	}
-	// 	else if(in_psw.length() != 0)
-	// 	{ // Передан логин / пароль 
-	// 		if(psw_is_valid(in_login, in_psw))
-	// 			print_new_key(in_login);
-	// 		else
-	// 			print_blanc();
-	// 	}
-	// 	else
-	// 	{ // Логин без ключа или пароля нам не интересен
-	// 		print_blanc();
-	// 	}
-	// }
 
 	return 0;
 }

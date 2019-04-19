@@ -1,4 +1,6 @@
-# Copyright 2014-present Facebook. All Rights Reserved.
+#!/bin/bash
+#
+# Copyright 2015-present Facebook. All Rights Reserved.
 #
 # This program file is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -15,33 +17,19 @@
 # 51 Franklin Street, Fifth Floor,
 # Boston, MA 02110-1301 USA
 #
+if [ "$(/usr/bin/rikor-fru-util -b /tmp/rikor-fru-address -g'dhcp1')" = "dhcp" ] ; then
 
-SUMMARY = "CGI scripts for lighttpd"
-DESCRIPTION = "Functions for httpd requests server"
-SECTION = "base"
-PR = "r1"
-LICENSE = "GPLv2"
-LIC_FILES_CHKSUM = "file://Makefile;md5=dab47dd8221aba77db5cbfd76dbff5eb"
+	echo -n "Setup dhclient for IPv6... "
+	runsv /etc/sv/dhc6 > /dev/null 2>&1 &
+	echo "done."
 
-DEPENDS += "bash"
+else
 
-SRC_URI = "file://sh "
+	logger "dhcp is switched off"
+	echo "dhcp is switched off"
 
-S = "${WORKDIR}/sh"
+	read -a Q <<< `/usr/bin/rikor-fru-util -b /tmp/rikor-fru-address -g'ip1 netmask1 gate1'`
+	ifconfig eth0 ${Q[0]} netmask ${Q[1]} up
+	ip route add default via ${Q[2]} dev eth0
 
-pkgdir = "rikcgi"
-
-do_install() {
-  dst="${D}/www/pages"
-  bin="${D}/www/bin"
-  install -d $dst
-  install -d $bin
-  install -m 755 *.sh ${dst}
-}
-
-FBPACKAGEDIR = "/www/pages"
-
-FILES_${PN} = "${FBPACKAGEDIR} /www/bin"
-
-RDEPENDS_${PN} += "bash"
-
+fi
