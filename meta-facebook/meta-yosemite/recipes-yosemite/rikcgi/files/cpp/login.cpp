@@ -134,17 +134,11 @@ bool psw_is_valid(std::string &l, std::string &p)
 
 	if(l == "root")
 	{
-		if(check_psw(rikor_fru_psw1, p.c_str(), &fru_data))
-			return true;
-		else
-			return false;
+		return check_psw(rikor_fru_psw1, p.c_str(), &fru_data);
 	}
 	if(l == "admin")
 	{
-		if(check_psw(rikor_fru_psw2, p.c_str(), &fru_data))
-			return true;
-		else
-			return false;
+		return check_psw(rikor_fru_psw2, p.c_str(), &fru_data);
 	}
 	return false;
 }
