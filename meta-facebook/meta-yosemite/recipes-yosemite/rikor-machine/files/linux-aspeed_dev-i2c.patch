@@ -1,5 +1,5 @@
 diff --git a/arch/arm/plat-aspeed/dev-i2c.c b/arch/arm/plat-aspeed/dev-i2c.c
-index 36892b4..fc88be1 100644
+index 36892b4..2d176cd 100644
 --- a/arch/arm/plat-aspeed/dev-i2c.c
 +++ b/arch/arm/plat-aspeed/dev-i2c.c
 @@ -925,28 +925,28 @@ static struct i2c_board_info ast_i2c_board_info_7[] __initdata = {
@@ -56,3 +56,49 @@ index 36892b4..fc88be1 100644
  };
  
  /* end of CONFIG_YOSEMITE */
+@@ -1273,12 +1273,12 @@ void __init ast_add_device_i2c(void)
+ 	platform_device_register(&ast_i2c_dev5_device_1M);
+ 	platform_device_register(&ast_i2c_dev6_device);
+ 	platform_device_register(&ast_i2c_dev7_device_1M);
+-	platform_device_register(&ast_i2c_dev8_device);
+-	platform_device_register(&ast_i2c_dev9_device);
+-	platform_device_register(&ast_i2c_dev10_device);
+-	platform_device_register(&ast_i2c_dev11_device);
+-	platform_device_register(&ast_i2c_dev12_device);
+-	platform_device_register(&ast_i2c_dev13_device);
++	// platform_device_register(&ast_i2c_dev8_device);
++	// platform_device_register(&ast_i2c_dev9_device);
++	// platform_device_register(&ast_i2c_dev10_device);
++	// platform_device_register(&ast_i2c_dev11_device);
++	// platform_device_register(&ast_i2c_dev12_device);
++	// platform_device_register(&ast_i2c_dev13_device);
+ 
+ 	i2c_register_board_info(0, ast_i2c_board_info_0,
+ 		              ARRAY_SIZE(ast_i2c_board_info_0));
+@@ -1296,16 +1296,16 @@ void __init ast_add_device_i2c(void)
+                   ARRAY_SIZE(ast_i2c_board_info_6));
+ 	i2c_register_board_info(7, ast_i2c_board_info_7,
+                   ARRAY_SIZE(ast_i2c_board_info_7));
+-	i2c_register_board_info(8, ast_i2c_board_info_8,
+-		              ARRAY_SIZE(ast_i2c_board_info_8));
+-	i2c_register_board_info(9, ast_i2c_board_info_9,
+-                  ARRAY_SIZE(ast_i2c_board_info_9));
+-	i2c_register_board_info(10, ast_i2c_board_info_10,
+-                  ARRAY_SIZE(ast_i2c_board_info_10));
+-	i2c_register_board_info(11, ast_i2c_board_info_11,
+-                  ARRAY_SIZE(ast_i2c_board_info_11));
+-	i2c_register_board_info(12, ast_i2c_board_info_12,
+-                  ARRAY_SIZE(ast_i2c_board_info_12));
++	// i2c_register_board_info(8, ast_i2c_board_info_8,
++	// 	              ARRAY_SIZE(ast_i2c_board_info_8));
++	// i2c_register_board_info(9, ast_i2c_board_info_9,
++ //                  ARRAY_SIZE(ast_i2c_board_info_9));
++	// i2c_register_board_info(10, ast_i2c_board_info_10,
++ //                  ARRAY_SIZE(ast_i2c_board_info_10));
++	// i2c_register_board_info(11, ast_i2c_board_info_11,
++ //                  ARRAY_SIZE(ast_i2c_board_info_11));
++	// i2c_register_board_info(12, ast_i2c_board_info_12,
++ //                  ARRAY_SIZE(ast_i2c_board_info_12));
+ }
+ 
+ #elif defined(CONFIG_LIGHTNING)
