@@ -18,7 +18,7 @@
 #include "gpio_name.h"
 
 #define GPIO_BASE_AA0  208
-#define DEBUG_MODE
+// #define DEBUG_MODE
 
 /********************************************************************************************/
 int gpio_num(char *str);		//Primitive

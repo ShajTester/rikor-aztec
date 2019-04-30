@@ -24,17 +24,18 @@ IMAGE_INSTALL += " \
   dscan \
   "
 #  riknet 
+#  rikkvm
 
 #  packagegroup-openbmc-python3y 
 
-IMAGE_INSTALL += " rikcgi-login"
+IMAGE_INSTALL += "rikcgi-login"
 
-IMAGE_INSTALL += " watchdog-ctrl"
+IMAGE_INSTALL += "watchdog-ctrl"
 
 
-IMAGE_INSTALL += " ledblink-lt "
-IMAGE_INSTALL += " initsc-lt "
-IMAGE_INSTALL += " rikbtnd "
+IMAGE_INSTALL += "ledblink-lt"
+IMAGE_INSTALL += "initsc-lt"
+IMAGE_INSTALL += "rikbtnd"
 
 
   

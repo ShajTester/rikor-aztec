@@ -63,6 +63,21 @@ int write_fru(const char *device, const rikor_fru_t *data);
 bool check_psw(rikor_fru_psw_t psw, const char *str, const rikor_fru_t *data);
 int set_psw(rikor_fru_psw_t psw, const char *oldPsw, const char *newPsw, rikor_fru_t *data);
 
+/*
+ * В state передается символ '0' или '1'
+ * В кодах это 0x30 и 0x31. Т.е. младший бит соответствует состоянию,
+ * а остальные являются проверкой записи.
+ *
+ * 0 - состояние отключено;
+ * 1 - состояние включено.
+ * 
+ * При любой ошибке чтения eeprom, функция в state возвращает 0.
+ *
+ * Если для записи в state передается любой символ кроме '1',
+ * то в EEPROM записывается '0'.
+ *
+ * Функция возвращает 0 или код ошибки
+ */
 int set_brd_state(const char *device, const char state);
 int get_brd_state(const char *device, char *state);
 
