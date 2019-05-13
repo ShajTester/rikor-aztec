@@ -5,7 +5,8 @@
 
 DESCRIPTION = "LED blink application"
 SECTION = "examples"
-DEPENDS = ""
+DEPENDS += ""
+RDEPENDS_${PN} += "bash"
 LICENSE = "GPL-2"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=8264535c0c4e9c6c335635c4026a8022"
 

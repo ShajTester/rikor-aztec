@@ -10,8 +10,8 @@ char str[DEFLENGTH];
 
 unsigned int pwmc[8] = {30, 30, 30, 30, 30, 30, 40 ,40};
 unsigned int curtemp[5];
-char pattern[48] = "/usr/local/fbpackages/fan_ctrl/set_fan_speed.sh ";
-char buffer[52];
+char pattern[] = "/usr/local/fbpackages/fan_ctrl/set_fan_speed.sh ";
+char buffer[53];
 //char patnum = " ";
 char pwmval[2];
 char arg[4];
@@ -34,7 +34,7 @@ int main()
 	char *estr;
 	int cnt = 0;
 
-	memset(curtemp, 0, 4*sizeof(curtemp));
+	memset(curtemp, 0, sizeof(curtemp));
 
 	#ifdef LINAPP
 	mf = fopen("sensors.txt", "r");
@@ -83,13 +83,13 @@ int main()
 	}
 
 	//Пересчет ШИМ
-	set_coef(&curtemp);
+	set_coef(curtemp);
 
 	//Установка значений
 	for (int i=0; i<8; i++)
 	{
 		memset(buffer, 0, sizeof(buffer));
-		memset(arg, 0, sizeof(buffer));
+		memset(arg, 0, sizeof(arg));
 		strcpy(buffer, pattern);
 		char dt[3];
 		char dn[2];
@@ -134,7 +134,7 @@ int get_num(char *data, int num)
 		buf[0] = data[19];
 		buf[1] = data[20];
 	}
-	res = atoi(&buf);
+	res = atoi(buf);
 	return res;
 }
 
