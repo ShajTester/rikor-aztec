@@ -23,19 +23,22 @@ IMAGE_INSTALL += " \
   rikor-fru \
   dscan \
   "
-#  riknet 
-#  rikkvm
+# IMAGE_INSTALL += "riknet"
 
 #  packagegroup-openbmc-python3y 
 
 IMAGE_INSTALL += "rikcgi-login"
-
 IMAGE_INSTALL += "watchdog-ctrl"
 
 
 IMAGE_INSTALL += "ledblink-lt"
 IMAGE_INSTALL += "initsc-lt"
 IMAGE_INSTALL += "rikbtnd"
+
+# KVM-VNC-video
+IMAGE_INSTALL += "libvncserver"
+IMAGE_INSTALL += "rikkvm"
+IMAGE_INSTALL += "vnc-example"
 
 
   
