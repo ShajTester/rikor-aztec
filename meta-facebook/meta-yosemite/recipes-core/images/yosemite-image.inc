@@ -22,6 +22,8 @@ IMAGE_INSTALL += " \
   fan-ctrl \
   rikor-fru \
   dscan \
+  rikkvm \
+  riktest \
   "
 #  riknet 
 #  rikkvm

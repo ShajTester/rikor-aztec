@@ -8,9 +8,9 @@ namespace ikvm
 {
 
 Manager::Manager(const Args& args) :
-    continueExecuting(true), serverDone(false), videoDone(true)/*,
+    continueExecuting(true), serverDone(false), videoDone(true),
     input(args.getKeyboardPath(), args.getPointerPath()),
-    video(args.getVideoPath(), input, args.getFrameRate()),
+    video(args.getVideoPath(), input, args.getFrameRate())/*,
     server(args, input, video)*/
 {
 	printf("iKVM VNC server-manager created\n");
@@ -19,6 +19,10 @@ Manager::Manager(const Args& args) :
 void Manager::run()
 {
     std::thread run(serverThread, this);
+
+    //DEBUG only
+    printf("iKVM video try to start\n");
+    video.start();
 
     while (continueExecuting)
     {
@@ -54,12 +58,12 @@ void Manager::run()
 void Manager::serverThread(Manager* manager)
 {
 	printf("iKVM thread started\n");
-    while (manager->continueExecuting)
+    /*while (manager->continueExecuting)
     {
-        /*manager->server.run();
+        manager->server.run();
         manager->setServerDone();
-        manager->waitVideo();*/
-    }
+        manager->waitVideo();
+    }*/
 }
 
 void Manager::setServerDone()

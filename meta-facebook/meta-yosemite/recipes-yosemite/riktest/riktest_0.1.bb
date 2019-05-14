@@ -21,41 +21,27 @@ DESCRIPTION = "Util for multiplexing terminal"
 SECTION = "base"
 PR = "r1"
 LICENSE = "GPLv2"
-LIC_FILES_CHKSUM = "file://Makefile;md5=20b213bbf2372d2b7bae08601d9d19e4"
+LIC_FILES_CHKSUM = "file://Makefile;md5=2ce369cd7202d950d8ab43b79bb2e7b5"
 
-SRC_URI = "file://kvm_main.cpp \
-	   file://ikvm_args.cpp \
-	   file://ikvm_args.hpp \
-           file://ikvm_manager.cpp \
-           file://ikvm_manager.hpp \
-           file://ikvm_input.cpp \
-	   file://ikvm_input.hpp \
-           file://ikvm_video.cpp \
-	   file://ikvm_video.hpp \
-           file://ikvm_server.hpp \
-	   file://ikvm_server.cpp \
-	   file://keysym.h \
-	   file://vncdefs.h \
+SRC_URI = "file://riktest.c \
            file://Makefile \
           "
-#DEPENDS += "libvncserver"
 
 S = "${WORKDIR}"
 
-pkgdir = "rikkvm"
+pkgdir = "riktest"
 
 do_install() {
   dst="${D}/usr/local/fbpackages/${pkgdir}"
   bin="${D}/usr/local/bin"
   install -d $dst
   install -d $bin
-  install -m 755 rikkvm ${dst}/rikkvm
-  ln -snf ../fbpackages/${pkgdir}/rikkvm ${bin}/rikkvm
+  install -m 755 riktest ${dst}/riktest
+  ln -snf ../fbpackages/${pkgdir}/riktest ${bin}/riktest
 }
 
 FBPACKAGEDIR = "${prefix}/local/fbpackages"
+FILES_${PN} = "${FBPACKAGEDIR}/riktest ${prefix}/local/bin"
 
-FILES_${PN} = "${FBPACKAGEDIR}/rikkvm ${prefix}/local/bin"
 
-#RDEPENDS_${PN} = "libvncserver"
 

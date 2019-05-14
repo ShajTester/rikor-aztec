@@ -1,9 +1,9 @@
 #pragma once
 
 #include "ikvm_args.hpp"
-//#include "ikvm_input.hpp"
+#include "ikvm_input.hpp"
 //#include "ikvm_server.hpp"
-//#include "ikvm_video.hpp"
+#include "ikvm_video.hpp"
 
 #include <condition_variable>
 #include <mutex>
@@ -61,11 +61,11 @@ class Manager
     /* @brief Boolean to indicate that video operations are complete */
     bool videoDone;
     /* @brief Input object */
-    //Input input;				//TODO
+    Input input;				
     /* @brief Video object */
-    //Video video;				//TODO
+    Video video;				
     /* @brief RFB server object */
-    //Server server;				//TODO
+    //Server server;				
     /* @brief Condition variable to enable waiting for thread completion */
     std::condition_variable sync;
     /* @brief Mutex for waiting on condition variable safely */
