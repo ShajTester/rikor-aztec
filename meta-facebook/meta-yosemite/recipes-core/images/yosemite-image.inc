@@ -39,7 +39,6 @@ IMAGE_INSTALL += "rikbtnd"
 
 # KVM-VNC-video
 IMAGE_INSTALL += "libvncserver"
-IMAGE_INSTALL += "rikkvm"
 IMAGE_INSTALL += "vnc-example"
 
 
