@@ -45,8 +45,14 @@ modprobe pmbus
 modprobe at24
 
 
-echo 24c02 0x50 > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
-echo 24c02 0x52 > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
+export AT24ADDR=$(i2cdetect -y 3 | awk '/5[0-7] / {print $(FNR+1)}')
+
+# echo 24c02 0x50 > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
+# echo 24c02 0x52 > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
+echo 24c02 0x$(AT24ADDR) > /sys/devices/platform/ast-i2c.3/i2c-3/new_device
+export RIKORFRUPATH="/sys/devices/platform/ast-i2c.3/i2c-3/3-00$(AT24ADDR)"
+echo 'RIKOR-FRU'
+echo $RIKORFRUPATH
 
 echo tmp75 0x49 > /sys/devices/platform/ast-i2c.6/i2c-6/new_device
 echo tmp75 0x4b > /sys/devices/platform/ast-i2c.6/i2c-6/new_device

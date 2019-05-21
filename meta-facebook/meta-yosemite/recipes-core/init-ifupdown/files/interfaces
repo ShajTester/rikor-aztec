@@ -2,16 +2,20 @@
 auto lo
 iface lo inet loopback
 
-iface eth0 inet static
-address 10.10.0.222
-netmask 255.255.255.0
-gateway 10.10.0.1
+
 auto eth0
+allow-hotplug eth0
+iface eth0 inet dhcp
+
+# iface eth0 inet static
+# 	address 10.10.0.222
+# 	netmask 255.255.255.0
+# 	gateway 10.10.0.1
 
 
-iface eth1 inet static
-address 10.10.0.220
-netmask 255.255.255.0
-gateway 10.10.0.1
-auto eth1
+# iface eth1 inet static
+#	address 10.10.0.220
+#	netmask 255.255.255.0
+#	gateway 10.10.0.1
+#	auto eth1
 
