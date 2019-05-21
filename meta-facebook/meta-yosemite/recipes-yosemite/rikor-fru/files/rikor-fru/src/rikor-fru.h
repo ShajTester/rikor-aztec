@@ -12,6 +12,9 @@
 
 #define ERRCRC      -2
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 
@@ -80,5 +83,11 @@ int set_psw(rikor_fru_psw_t psw, const char *oldPsw, const char *newPsw, rikor_f
  */
 int set_brd_state(const char *device, const char state);
 int get_brd_state(const char *device, char *state);
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 #endif // RIKOR_FRU_H
