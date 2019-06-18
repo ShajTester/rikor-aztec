@@ -20,10 +20,7 @@
 using json = nlohmann::json;
 using namespace std::chrono_literals;
 
-extern "C"
-{
 #include <rikor-fru.h>
-}
 
 #define EXPIRED_INTERVAL  180
 

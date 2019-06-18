@@ -19,7 +19,7 @@ VAL= echo ${LINE3:15:1}${LINE3:16:1}${LINE3:17:1}${LINE3:18:1}${LINE3:19:1} > /w
 VAL3=`sed -n 1p /www/pages/sentmp.log`
 VAL= echo ${LINE4:15:1}${LINE4:16:1}${LINE4:17:1}${LINE4:18:1}${LINE4:19:1} > /www/pages/sentmp.log
 VAL4=`sed -n 1p /www/pages/sentmp.log`
-VAL= echo ${LINE1:18:1}${LINE1:19:1}${LINE1:20:1}${LINE1:21:1}${LINE1:22:1} > /www/pages/sentmp.log 
+VAL= echo ${LINE5:18:1}${LINE5:19:1}${LINE5:20:1}${LINE5:21:1}${LINE5:22:1} > /www/pages/sentmp.log 
 VAL5=`sed -n 1p /www/pages/sentmp.log`
 
 STR="[[\"Sensor1\",\"$VAL1\"],[\"Sensor2\",\"$VAL2\"],[\"Sensor3\",\"$VAL3\"],[\"Sensor4\",\"$VAL4\"],[\"Sensor5\",\"$VAL5\"]]"

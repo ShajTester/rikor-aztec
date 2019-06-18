@@ -86,7 +86,7 @@ int get_brd_state(const char *device, char *state);
 
 
 #ifdef __cplusplus
-extern "C" {
+}
 #endif
 
 

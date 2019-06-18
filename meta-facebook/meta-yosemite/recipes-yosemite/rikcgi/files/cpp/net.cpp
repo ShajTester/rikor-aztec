@@ -28,10 +28,7 @@
 
 #include "json.hpp"
 
-extern "C"
-{
 #include <rikor-fru.h>
-}
 
 using json = nlohmann::json;
 using namespace std::chrono_literals;
