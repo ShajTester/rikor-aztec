@@ -13,14 +13,20 @@
 #include <sys/types.h>
 #include <sys/errno.h>
 
+#include <dirent.h>
+
 // #include <openbmc/gpio.h>
 
 #include "gpio_name.h"
+
+#define GPIO_PORT_OFFSET 8
+#define GPIO_BASE_PATH "/sys/class/gpio"
 
 #define GPIO_BASE_AA0  208
 // #define DEBUG_MODE
 
 /********************************************************************************************/
+int get_gpio_base();
 int gpio_num(char *str);		//Primitive
 int gpio_export(int gpio);
 int gpio_set_direction(short dir, int gpionum);
@@ -46,10 +52,12 @@ int main(void)
 {
   int tmp = 0;
 
+  int gpio_base = get_gpio_base();
+
   printf("Well, let's start...\n");
   for (int i=0; i<36; i++)
   {
-    tmp = gpio_num(gpio_rikor[i]);
+    tmp = gpio_num(gpio_rikor[i]) + gpio_base;
     if (tmp < 0)
     {
 #ifdef DEBUG_MODE
@@ -78,9 +86,9 @@ int main(void)
     //For some outputs
   }
   
-  gpio_set_value(1, gpio_num(FP_ID_LED));
-  gpio_set_value(1, gpio_num(FP_LED_STATUS_AMBER));
-  gpio_set_value(1, gpio_num(FP_LED_STATUS_GREEN));
+  gpio_set_value(1, gpio_num(FP_ID_LED) + gpio_base);
+  gpio_set_value(1, gpio_num(FP_LED_STATUS_AMBER) + gpio_base);
+  gpio_set_value(1, gpio_num(FP_LED_STATUS_GREEN) + gpio_base);
 
 
   system("/usr/bin/ledblink-1.0 135 10 &");             //135 - AMBER led gpio
@@ -89,6 +97,105 @@ int main(void)
 
   return 0;
 }
+
+/**
+ * Determine the GPIO base number for the system.  It is found in
+ * the 'base' file in the /sys/class/gpio/gpiochipX/ directory where the
+ * /sys/class/gpio/gpiochipX/label file has a '1e780000.gpio' in it.
+ *
+ * Note: This method is ASPEED specific.  Could add support for
+ * additional SOCs in the future.
+ *
+ * @return int - the GPIO base number, or < 0 if not found
+ */
+
+typedef unsigned int gboolean;
+#define TRUE  1
+#define FALSE 0
+
+int get_gpio_base()
+{
+  int gpio_base = -1;
+
+  DIR* dir = opendir(GPIO_BASE_PATH);
+  if (dir == NULL)
+  {
+    fprintf(stderr, "Unable to open directory %s\n",
+        GPIO_BASE_PATH);
+    return -1;
+  }
+
+  struct dirent* entry;
+  while ((entry = readdir(dir)) != NULL)
+  {
+    /* Look in the gpiochip<X> directories for a file called 'label' */
+    /* that contains '1e780000.gpio', then in that directory read */
+    /* the GPIO base out of the 'base' file. */
+
+    if (strncmp(entry->d_name, "gpiochip", 8) != 0)
+    {
+      continue;
+    }
+
+    gboolean is_bmc = FALSE;
+    char* label_name;
+    asprintf(&label_name, "%s/%s/label",
+        GPIO_BASE_PATH, entry->d_name);
+
+    FILE* fd = fopen(label_name, "r");
+    free(label_name);
+
+    if (!fd)
+    {
+      continue;
+    }
+
+    char label[14];
+    if (fgets(label, 14, fd) != NULL)
+    {
+      if (strcmp(label, "1e780000.gpio") == 0)
+      {
+        is_bmc = TRUE;
+      }
+    }
+    fclose(fd);
+
+    if (!is_bmc)
+    {
+      continue;
+    }
+
+    char* base_name;
+    asprintf(&base_name, "%s/%s/base",
+        GPIO_BASE_PATH, entry->d_name);
+
+    fd = fopen(base_name, "r");
+    free(base_name);
+
+    if (!fd)
+    {
+      continue;
+    }
+
+    if (fscanf(fd, "%d", &gpio_base) != 1)
+    {
+      gpio_base = -1;
+    }
+    fclose(fd);
+
+    /* We found the right file. No need to continue. */
+    break;
+  }
+  closedir(dir);
+
+  if (gpio_base == -1)
+  {
+    fprintf(stderr, "Could not find GPIO base\n");
+  }
+
+  return gpio_base;
+}
+
 
 /********************************************************************************************/
 int gpio_num(char *str)
